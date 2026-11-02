@@ -1,6 +1,6 @@
 # Arquitetura do CRM com PostgreSQL
 
-A branch `feat/crm-netlify`, baseada em `feat/crm-postgres`, mantém os componentes da primeira versão e usa API Next.js com PostgreSQL pelo SDK oficial `@netlify/database`. O esquema do backup continua `schemaVersion: 1`; os IDs de texto da versão anterior são aceitos. A versão estática publicada no Netlify e o ZIP anterior não são modificados.
+A branch `feat/crm-v2`, baseada em `feat/crm-netlify`, mantém os componentes da primeira versão e usa API Next.js com PostgreSQL pelo SDK oficial `@netlify/database`. O backup usa `schemaVersion: 2`; backups v1 são convertidos preservando IDs e nomes. A versão estática publicada no Netlify e o ZIP anterior não são modificados.
 
 ## Fluxo de dados
 
@@ -26,11 +26,11 @@ Uma gravação bloqueia a linha de revisão, verifica a versão, compara entidad
 
 Dois clientes que gravam a mesma revisão não podem ter ambos sucesso: o segundo recebe 409. Repetir uma requisição já confirmada com o mesmo ID/conteúdo não gera outra gravação. Campos de formulários não são reaplicados automaticamente após conflito. Mudanças remotas invalidam o token de edição de formulários e movimentos em andamento, exigindo revisão/reabertura.
 
-O protocolo HTTP usa snapshots completos e revisão global; a escrita SQL é incremental. Não há mesclagem por campo, paginação ou fila offline. Para bases maiores, a evolução é endpoints de comandos e revisão por entidade. A sincronização consulta a cada 30 segundos em atividade, 120 segundos após um minuto sem interação e pausa em aba oculta ou após cinco minutos inativa. Foco/visibilidade atualizam imediatamente. Um 304 ainda utiliza Function e banco; monitore os créditos.
+O protocolo HTTP usa snapshots completos e revisão global; a escrita SQL é incremental. Não há mesclagem por campo, paginação ou fila offline. Para bases maiores, a evolução é endpoints de comandos e revisão por entidade. A sincronização consulta a cada 30 segundos em atividade, 120 segundos após um minuto sem interação e pausa em aba oculta ou após cinco minutos inativa. Foco/visibilidade atualizam imediatamente. Um 304 ainda utiliza Function e banco. No modo demo, uma consulta adicional mantém limites compartilhados no PostgreSQL; monitore os créditos.
 
 ## Acesso e implantação
 
-HTTP Basic protege a aplicação e a API, sem tela de login ou níveis de acesso no CRM. Credenciais/origem ausentes falham fechado. Gravações exigem origem exata e JSON, com limite de 4 MB. Para acesso externo, o servidor exige HTTPS; no Netlify o TLS e a execução são gerenciados pela plataforma, enquanto na VPS usa-se proxy reverso TLS e aplicativo em loopback. Credenciais nunca são enviadas no bundle cliente nem colocadas em `NEXT_PUBLIC_*`.
+A demonstração usa `CRM_ACCESS_MODE=demo`, público e sem senha. A proteção HTTP Basic é opcional via `CRM_ACCESS_MODE=basic`, sem tela de login ou níveis de acesso; nesse modo, credenciais ausentes falham fechado. Ambos validam origem e formato das gravações. Gravações exigem origem exata e JSON, com limite de 4 MB. Para acesso externo, o servidor exige HTTPS; no Netlify o TLS e a execução são gerenciados pela plataforma, enquanto na VPS usa-se proxy reverso TLS e aplicativo em loopback. Credenciais nunca são enviadas no bundle cliente nem colocadas em `NEXT_PUBLIC_*`.
 
 A proteção é de um espaço compartilhado. Ela não identifica autores individuais e não equivale a autenticação multiusuário. Essa será outra etapa antes de introduzir permissões ou auditoria por pessoa.
 
@@ -39,3 +39,9 @@ O [guia Netlify](netlify.md) descreve o segundo projeto, Database oficial, migra
 ## WhatsApp Business e IA
 
 Permanecem fora desta etapa. Devem entrar como serviços do servidor, com credenciais protegidas, validação de webhooks, idempotência, fila e modelos próprios de conversas/mensagens. A resposta manual de um atendente deverá pausar a IA atomicamente por conversa, e o trabalhador de IA deverá revalidar esse estado antes de enviar. Esses serviços podem reutilizar clientes, oportunidades e IDs existentes sem alterar a estrutura visual dos funis.
+
+## Extensões v2
+
+`crm_business_types`, `crm_sources`, `crm_sellers`, `crm_distribution_rules` e `crm_scheduled_activities` são normalizados e escritos incrementalmente na mesma transação do snapshot e do histórico. Regras mantêm prioridade por posição; agenda mantém datas UTC. Vendedores são cadastros comerciais, sem autenticação individual.
+
+`crm_demo_limits` não participa dos backups/snapshots e controla requisições anonimamente por contadores atômicos compartilhados. `crm_conversations` e `crm_messages` são uma fundação de servidor, não exposta no snapshot; não existe webhook ou conexão WhatsApp ativa. Detalhes em [CRM v2](crm-v2.md).

@@ -76,6 +76,11 @@ export function deletePipeline(
   return {
     ...next,
     pipelines: next.pipelines.filter((p) => p.id !== pipelineId),
+    distributionRules: next.distributionRules.map((r) =>
+      r.pipelineId === pipelineId
+        ? { ...r, pipelineId: targetId, enabled: false }
+        : r,
+    ),
   };
 }
 export function saveCustomer(
@@ -130,6 +135,9 @@ export function saveDeal(
   };
   const next = {
     ...data,
+    scheduledActivities: data.scheduledActivities.map((t) =>
+      t.dealId === id ? { ...t, customerId: input.customerId } : t,
+    ),
     deals: id
       ? data.deals.map((d) => (d.id === id ? deal : d))
       : [...data.deals, deal],
@@ -145,6 +153,16 @@ export function deleteDeal(data: CrmData, id: string): CrmData {
     ...data,
     deals: data.deals.filter((d) => d.id !== id),
     activities: data.activities.filter((a) => a.dealId !== id),
+    scheduledActivities: data.scheduledActivities.map((t) =>
+      t.dealId === id
+        ? {
+            ...t,
+            dealId: "",
+            customerId:
+              t.customerId || data.deals.find((d) => d.id === id)!.customerId,
+          }
+        : t,
+    ),
   };
 }
 export function moveDeal(
@@ -199,6 +217,9 @@ export function filterDeals(
         d.pipelineId === pipelineId &&
         (filters.status === "all" || d.status === filters.status) &&
         (!filters.owner || d.owner === filters.owner) &&
+        (!filters.businessTypeId ||
+          d.businessTypeId === filters.businessTypeId) &&
+        (!filters.source || d.source === filters.source) &&
         (!filters.priority || d.priority === filters.priority) &&
         (filters.due !== "overdue" ||
           (!!d.expectedCloseDate &&

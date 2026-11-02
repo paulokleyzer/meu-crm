@@ -1,111 +1,107 @@
-# CRM no Netlify com PostgreSQL
+# Publicar a CRM v2 no segundo projeto Netlify
 
-A branch `feat/crm-netlify` parte de `feat/crm-postgres`. Mantém os mesmos componentes, funis e drag and drop e usa o SDK oficial **`@netlify/database`**, API Next.js em Netlify Functions e migrações oficiais do Netlify Database. Não exige VPS, Docker, Supabase ou um computador ligado para usar a versão publicada.
+A branch `feat/crm-v2`, baseada em `feat/crm-netlify`, executa Next.js/React/TypeScript em Functions e usa o SDK oficial **`@netlify/database`**. Os dados ficam no Netlify Database (PostgreSQL). Não exige VPS, Supabase, Docker ou computador ligado depois da publicação.
 
-**Use um segundo projeto. Não vincule esta branch ao projeto `lucky-donut-3d0c63`.** O site antigo e seus dados locais devem continuar funcionando no endereço atual. O código inclui uma regra `build.ignore` para pular builds automáticos do projeto antigo antes da instalação/provisionamento, além de uma trava no comando de build pelo nome/endereço. Essas proteções não substituem a escolha correta do projeto. Não execute `netlify link`, `netlify init` ou comandos de publicação apontando para aquele projeto.
+**Não use o projeto `lucky-donut-3d0c63`.** Seu site, domínio e dados anteriores devem permanecer intactos. As instruções abaixo destinam-se a um segundo projeto de testes, com dados fictícios. Não há solicitação de senha no modo de demonstração: a base é pública e compartilhada.
 
-## Criar o segundo projeto conectado ao GitHub
+## Conectar o GitHub e preparar a publicação
 
-1. No Netlify, abra **Add new project → Import an existing project → GitHub**. Autorize o repositório `paulokleyzer/meu-crm`.
-2. Escolha um **nome novo**, por exemplo `meu-crm-postgres-<seu-identificador>`, e a branch de produção **`feat/crm-netlify`**. Não selecione `main` ou o projeto antigo. O diretório base é a raiz do repositório.
-3. Confirme as configurações lidas de `netlify.toml`: build **`npm run build:netlify`**, publish directory **`.next`**, Node.js **24**. O adaptador oficial `@netlify/plugin-nextjs` executa a API e o proxy de acesso. Não use `out`, `build:static` ou o ZIP de `deploy/`.
-4. **Antes do primeiro deploy**, adicione as variáveis abaixo nas configurações do projeto. A senha é um segredo do servidor, criado e salvo por você no gerenciador de senhas. Não a envie ao chat ou ao GitHub. A caixa HTTP Basic do navegador usa essas credenciais; nenhuma tela de login foi adicionada ao CRM.
+1. Se o segundo projeto ainda não existir, no Netlify abra **Add new project → Import an existing project → GitHub** e escolha `paulokleyzer/meu-crm`. Crie um nome novo. Se já existir, abra somente esse projeto de testes.
+2. Selecione **`feat/crm-v2`** como branch de produção do **novo projeto**. Diretório base: raiz do repositório. Não altere `main` ou a configuração do projeto antigo.
+3. Confirme `netlify.toml`: build **`npm run build:netlify`**, publish directory **`.next`**, Node.js **24**, adaptador oficial `@netlify/plugin-nextjs`. Não use `out`, `build:static` ou o ZIP legado.
+4. Configure as variáveis abaixo no novo projeto, disponíveis em build/Functions e nos contextos que for testar:
 
-   | Variável             | Valor/configuração                                                                                                                                                                        |
-   | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `CRM_BASIC_USER`     | Seu usuário de acesso ao espaço compartilhado.                                                                                                                                            |
-   | `CRM_BASIC_PASSWORD` | Senha aleatória, preferencialmente com 32 ou mais caracteres; mínimo 16. Marque como secreta quando disponível.                                                                           |
-   | `CRM_ALLOWED_ORIGIN` | URL **do novo projeto**, por exemplo `https://meu-crm-postgres-<seu-identificador>.netlify.app`, sem barra final. Troque para o domínio HTTPS definitivo se adicionar um domínio próprio. |
+   | Variável             | Valor                                                                                                                                                                 |
+   | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `CRM_ACCESS_MODE`    | `demo`. É também o padrão desta branch. Permite acesso sem usuário ou senha.                                                                                          |
+   | `CRM_ALLOWED_ORIGIN` | Origem HTTPS exata da **nova URL**, sem barra final, por exemplo `https://<novo-projeto>.netlify.app`.                                                                |
+   | `CRM_DEPLOY_V2`      | Defina `true` **somente quando quiser liberar o build/publicação deste segundo projeto**. Enquanto ausente/diferente, a regra `build.ignore` pula builds automáticos. |
 
-   As variáveis de acesso precisam estar disponíveis para **Functions e execução do aplicativo**, além de qualquer contexto de preview que você habilitar. Se a interface de configuração não separar os escopos, use todos os escopos. Não crie variáveis `NEXT_PUBLIC_*` para credenciais. Não configure `CRM_E2E_ALLOW_RESET=true` no projeto publicado.
+   `CRM_BASIC_USER` e `CRM_BASIC_PASSWORD` não são necessários no modo `demo`; valores antigos são ignorados nesse modo. Não configure `CRM_E2E_ALLOW_RESET=true` no site publicado. Nenhuma credencial do banco ou token deve ir para `NEXT_PUBLIC_*`.
 
-5. Na área **Database** do **novo projeto**, habilite/conclua o provisionamento do **Netlify Database**, se o painel pedir. A dependência `@netlify/database` permite que o build oficial detecte e provisione a base. Verifique a disponibilidade e a franquia de créditos/banco do seu plano antes de confirmar qualquer contratação. Este projeto não solicita upgrade pago.
-6. Publique **somente o novo projeto**. O Netlify fornece `NETLIFY_DB_URL` e a configuração do driver à execução; o aplicativo os lê pelo SDK oficial. **Não copie a `DATABASE_URL` da VPS/local para o Netlify**, não configure manualmente uma URL de Neon/Supabase e não defina `NETLIFY_DB_DRIVER` no painel sem orientação do serviço.
-7. Confirme no log de build o adaptador Next.js e as duas migrações. Na área Database, verifique o resultado das migrações. O banco inicial tem um funil vazio; nenhum cliente real nem seed de demonstração é publicado automaticamente.
-8. Abra a **nova URL HTTPS**, informe as credenciais na caixa do navegador e execute a conferência abaixo. O site antigo continua no endereço anterior.
+5. Na área **Database** do novo projeto, conclua a ativação do **Netlify Database**, caso o painel solicite. O build detecta o SDK oficial e pode provisionar a base automaticamente. Verifique disponibilidade, créditos/franquia do plano e região antes de confirmar qualquer contratação; o código não solicita upgrade pago.
+6. Quando você decidir publicar, com `CRM_DEPLOY_V2=true` configurado, dispare um deploy **somente do segundo projeto**. Confira o adaptador Next.js e os quatro arquivos de migração no build. O Netlify fornece `NETLIFY_DB_URL` e o driver ao SDK; não copie `DATABASE_URL` da VPS/local nem configure uma URL manual de Neon/Supabase.
+7. Confira o resultado das migrações no painel Database. A primeira instalação cria um funil vazio e um responsável chamado **Equipe**, que pode ser renomeado em Configurações. Nenhum seed ou dado real é publicado automaticamente.
+8. Abra a nova URL HTTPS. Deve carregar diretamente, sem diálogo de senha. Execute o checklist abaixo antes de usar a demonstração.
 
-Se o assistente iniciar um deploy antes de permitir definir as variáveis, o aplicativo falha fechado (503) e nenhum endpoint é aberto. Configure as variáveis no novo projeto e faça um novo deploy. Tokens pessoais do Netlify não são necessários para conectar GitHub pelo painel; não os coloque nas variáveis do site.
+Se o assistente disparar um build antes de você definir a variável de publicação, ele será ignorado. Depois de preparar o projeto, defina a variável e solicite novo deploy. Para continuar exigindo ação manual nas próximas versões, pause os deploys automáticos no painel do novo projeto ou remova a variável quando terminar a publicação. Não vincule o checkout ao projeto antigo, nem use `netlify link/init/deploy` apontando para ele.
 
-## Migrações e isolamento do banco
+## Migrações e registros anteriores
 
-Os arquivos ficam em `netlify/database/migrations/`:
+O runner oficial lê `netlify/database/migrations/` por `[database.migrations]`, gera artefatos de publicação e aplica os arquivos no banco do contexto do deploy:
 
-- `001_crm.sql`: tabelas normalizadas, histórico, controle de revisão e funil vazio.
-- `002_snapshot.sql`: snapshot de leitura e restrições adiadas para reordenar/transferir entidades em lotes sem inconsistência.
+- `001_crm.sql`: clientes, funis, etapas, oportunidades, atividades históricas e revisão.
+- `002_snapshot.sql`: cache de leitura transacional e restrições para ordenação.
+- `003_crm_v2.sql`: tipos, origens, responsáveis, regras, agenda, limites da demonstração e snapshot v2.
+- `004_whatsapp_foundation.sql`: conversas/mensagens e estado de pausa da IA, somente no servidor, sem webhook ativo.
 
-O build oficial lê `[database.migrations]`, prepara os arquivos em `.netlify/internal/db/migrations/` e a plataforma aplica as migrações na publicação. Não rode `db:migrate` no build Netlify e não apague tabelas para repetir uma migração. Migrações publicadas são imutáveis; mudanças futuras exigem um novo arquivo numerado.
+A migração 003 preserva as tabelas e registros anteriores. Extrai as origens e responsáveis existentes para cadastros, sem listas fixas, e mantém a revisão. Negócios antigos ficam sem tipo até serem classificados. Histórico de transações não é apagado.
 
-O runner oficial registra arquivos em `netlify.migrations`; o runner legado da VPS registra checksums em `crm_migrations`. **Não aplique os dois runners no mesmo banco**: para esta implantação crie uma base Netlify nova e use apenas as migrações oficiais. Para migrar dados de uma base anterior, exporte/importe e confira em um destino separado. A migração 002 também foi validada sobre o esquema anterior sem apagar os registros.
+Não execute `db:migrate` no build Netlify. O runner oficial usa `netlify.migrations`; o runner legado da VPS usa `crm_migrations` e checksums. Não misture os runners no mesmo banco. Migrações publicadas são imutáveis; mudanças futuras exigem novo arquivo. Faça backup antes de atualizar uma base existente. Dados locais do navegador/site antigo só são transferidos por importação explícita.
 
-Deploy Previews/branch deploys usam a conexão de banco fornecida pela plataforma para seu contexto; o pool não é compartilhado globalmente entre contextos. Não sobrescreva `NETLIFY_DB_URL` com uma URL de produção comum a todos os previews. Confira no painel a base/branch atribuída a cada preview antes de utilizá-lo. Se não precisar desses ambientes, desative builds de branches/previews no **novo projeto** para economizar créditos.
+O SDK usa a conexão do contexto atual e encerra pools por requisição. Confira a base/branch atribuída a cada Deploy Preview antes de testar; não sobrescreva `NETLIFY_DB_URL` com uma conexão de produção comum. Desative previews/branch deploys desnecessários no segundo projeto para reduzir consumo.
 
-## Importar o backup anterior
+## Backup e importação
 
-1. No CRM antigo, use **menu do espaço de trabalho → Exportar backup**, no navegador que contém seus dados locais.
-2. Exporte também o novo CRM se ele já contiver dados.
-3. Na nova URL, escolha **Importar backup**, selecione o JSON v1 e revise a confirmação. Para esta versão serverless, use um arquivo menor que **4 MB**, deixando margem para o envelope da requisição.
-4. Confirme a restauração. Ela substitui o conjunto compartilhado inteiro em uma transação, preserva IDs, funis, etapas e cartões e registra o estado anterior no histórico.
-5. Recarregue a página e abra a nova URL em outro dispositivo para confirmar. O site antigo não é modificado pela importação.
+1. No navegador que contém os dados do CRM antigo, escolha **menu do espaço de trabalho → Exportar backup**.
+2. Exporte também a base atual da v2 antes de restaurar qualquer arquivo.
+3. Na v2, use **Importar backup** e selecione JSON v1 ou v2, menor que 4 MB, deixando margem para o envelope HTTP.
+4. Revise a confirmação: a restauração **substitui o conjunto compartilhado inteiro**, incluindo configurações, regras e agenda. Um v1 não contém regras/agenda/tipos; esses conjuntos ficam vazios, e suas origens/responsáveis são derivados dos negócios importados.
+5. Confirme e recarregue em outro dispositivo. IDs e dados do arquivo são preservados; o estado anterior fica em `crm_history`. A importação não altera o site antigo.
 
-## Conferir a versão publicada
+Abas de versões anteriores não podem gravar v1 como uma edição normal: recebem 426 e devem ser recarregadas. Backups v1 continuam permitidos pela operação explícita de importação. O JSON v2 exportado não deve ser importado na interface estática antiga.
 
-Use somente dados fictícios nesta validação:
+## Conferência na nova URL
 
-1. Sem credenciais, `/` e `/api/crm` devem solicitar autenticação (401); uma gravação com origem diferente deve ser rejeitada (403).
-2. Cadastre um cliente, crie um funil e suas etapas, cadastre uma oportunidade e recarregue. Verifique os registros na área Database com consultas de leitura, como `SELECT count(*) FROM crm_customers;` e `SELECT revision FROM crm_state;`.
-3. Arraste a oportunidade entre etapas e para uma etapa vazia. Recarregue e confira a etapa em outro dispositivo.
-4. Edite em dois dispositivos: a atualização aparece na próxima sincronização ou ao recuperar foco. Gravar uma revisão antiga deve gerar aviso de conflito, sem sobrescrever a alteração remota.
-5. Importe/exporte um backup fictício e confira o histórico. Em Network, a consulta com revisão inalterada deve retornar **304**, sem reenviar os dados.
-6. Confirme que os arquivos JavaScript públicos não contêm senha, token ou URL do banco. As credenciais devem existir somente no servidor e no diálogo nativo de acesso do navegador.
+Use apenas dados fictícios:
 
-Não execute a suíte E2E contra a URL publicada: ela restaura dados fictícios e só aceita loopback. O checklist acima deve ser feito no segundo projeto antes de considerá-lo liberado para uso.
+1. Abra uma janela privada. `/` e `GET /api/crm` devem carregar sem senha e sem `WWW-Authenticate`. PUT sem origem autorizada deve retornar 403. Ausência de senha significa acesso público; origem e limites não são autenticação.
+2. Cadastre cliente e oportunidade, crie um funil e etapas, recarregue e confira em outro dispositivo. No Database, consulte contagens de leitura de `crm_customers`, `crm_deals` e a revisão em `crm_state`.
+3. Arraste cartões entre etapas, para uma coluna vazia e para um dos destinos de outro funil que aparecem durante o arraste. Teste reordenação, teclado e toque no celular.
+4. Em Configurações, crie/renomeie tipos e origens, crie um responsável e teste desativação. Configure regras, prioridade e padrão. Use o simulador e confira a oportunidade fictícia no destino.
+5. Crie uma atividade vencida e outra futura. Confira o indicador no cartão, conclusão/reabertura, lembretes internos e persistência após recarga.
+6. Confira filtros, indicadores e um backup fictício. Faça uma alteração em dois dispositivos para verificar sincronização e aviso de conflito.
+7. Confira respostas 304 nas consultas com revisão inalterada e ausência de credenciais nos arquivos públicos. Não execute testes automatizados de reset contra a URL hospedada.
 
-## Rodar localmente sem Docker
+O comportamento hospedado, o provisionamento e a execução Edge precisam ser conferidos após sua publicação. Não há nova URL criada por esta tarefa.
 
-Requisitos: Node.js 24 e npm. O Netlify CLI usa seu banco local oficial (PostgreSQL via PGlite e protocolo pg) e o runtime de Edge Functions utiliza Deno, obtido pelo CLI quando necessário. O ambiente precisa permitir acesso HTTPS aos recursos oficiais do Netlify e à distribuição do Deno; não desative TLS para contornar falhas de rede.
+## Rodar e testar localmente sem Docker
+
+Requisitos: Node.js 24 e npm. Netlify Dev usa `@netlify/database-dev` (PGlite/PostgreSQL com protocolo pg), sem Docker. Edge Functions usam Deno, obtido pelo CLI quando necessário; permita downloads HTTPS oficiais, sem desabilitar TLS.
 
 ```bash
-git switch feat/crm-netlify
+git switch feat/crm-v2
 npm ci
 npm run setup:netlify
 npm run netlify:db:migrate
 npm run netlify:dev
 ```
 
-Abra **http://localhost:8888** na mesma máquina. As credenciais geradas estão em `.env.local` (arquivo privado, nunca versionado). `setup:netlify` não sobrescreve um arquivo existente: se você vinha da VPS, mantenha seu backup e configure `CRM_ALLOWED_ORIGIN=http://localhost:8888` para este modo. O SDK recebe a conexão local do Netlify Dev; os dados ficam em `.netlify/db`, ignorada pelo Git. A porta 3000 é o servidor interno; abra pelo endereço 8888 para testar a execução integrada.
-
-Não remova `.netlify/db` se quiser preservar seus dados locais. O banco local não envia automaticamente os dados para a nuvem: use o backup JSON para uma transferência explícita. Um computador ligado é necessário apenas enquanto você desenvolve localmente, não para o site publicado.
-
-## Consumo e sincronização
-
-- Uma aba visível e ativa consulta a revisão a cada **30 segundos**; após um minuto sem interação, a cada **120 segundos**. Abas ocultas ou sem interação por cinco minutos pausam. Voltar ao foco atualiza imediatamente.
-- Resposta **304** quando não há mudanças, uma consulta SQL indexada na linha de revisão e nenhum reenvio do snapshot. Mesmo um 304 continua consumindo uma invocação de Function; não representa custo zero.
-- Escritas em lote apenas das entidades alteradas, transações atômicas e pool com no máximo duas conexões por requisição, encerradas ao finalizar. Movimentar um cartão não regrava clientes inalterados.
-- Em uma hora de atividade contínua, o intervalo regular cai de aproximadamente 1.440 consultas para 120 por aba, em comparação com os 2,5 segundos anteriores. Foco, salvamentos e recarregamentos geram requisições adicionais.
-
-Monitore no painel créditos de build, Functions e Database, inclusive armazenamento e branches de preview. Configure alertas disponíveis e remova previews desnecessários. As franquias e condições comerciais podem mudar; esta configuração é compatível com serviços oficiais, mas não promete uso ilimitado ou custo sempre zero. O histórico armazena snapshots completos e cresce com cada gravação. Faça backups e avalie retenção antes de uma base grande; não há limpeza automática de histórico nesta etapa.
-
-## Testes e limites da validação
+Abra **http://localhost:8888** na mesma máquina. O setup cria `.env.local` sem sobrescrever outro arquivo. Em um arquivo existente, use `CRM_ACCESS_MODE=demo` e `CRM_ALLOWED_ORIGIN=http://localhost:8888`. O SDK recebe a conexão do banco local automaticamente; `.netlify/db` é privada e ignorada pelo Git. Não a remova se quiser preservar esses dados. A porta 3000 é interna; o teste integrado deve usar 8888.
 
 ```bash
 npm run check
 npm run test:netlify:db
-npm run netlify:db:migrate
-npm run netlify:dev
+npm run test:netlify:package
+npm run format:check
 ```
 
-Em outro terminal, com a autorização de reset **somente para seu banco local de testes**:
+Com o servidor local aberto, em outro terminal:
 
 ```bash
 CRM_E2E_ALLOW_RESET=true PLAYWRIGHT_BASE_URL=http://localhost:8888 npm run test:e2e
 ```
 
-Instale o Chromium do Playwright (`npx playwright install --with-deps chromium`) ou informe `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. A suíte verifica os fluxos existentes, mouse, teclado e toque, colunas vazias, recarga, conflitos, importação e proteção da API.
+Instale o Chromium do Playwright ou informe seu executável. E2E só aceita loopback e restaura dados fictícios. Testes PostgreSQL nativos adicionais usam `npm run test:db` com `TEST_DATABASE_URL` exclusiva de testes.
 
-`npm run test:netlify:package` valida o adaptador oficial, o bundle do proxy, os artefatos de migração, ausência de segredos nos arquivos públicos e invocação da função empacotada com GET/PUT/304 contra um Netlify Database local novo. O CLI 27.16.2 tenta provisionar Database mesmo com `netlify build --offline`; o teste usa uma cópia temporária e exclui apenas essa detecção remota do manifesto da cópia. O SDK continua instalado e é executado pelo teste. O manifesto de produção não é modificado. Esta verificação exige Deno e rede para o empacotador, e **não comprova provisionamento ou publicação no serviço hospedado**.
+O CLI 27.16.2 tenta provisionar Database até com `netlify build --offline`. O teste de empacotamento usa uma cópia temporária, excluindo somente essa detecção remota do manifesto da cópia. O SDK continua instalado/executado, e o manifesto real não muda. Verifica Function, proxy Edge, quatro migrações, segredos e CRUD v2 com SQL local. Isso não comprova publicação hospedada. Veja o [registro de validação](netlify-validation.md) para as limitações observadas.
 
-`npm run netlify:package` executa o build oficial completo, incluindo a integração de provisionamento, quando o checkout estiver vinculado **ao novo projeto** e autenticado. Não o use vinculado ao site antigo. A validação hospedada depende de acesso à conta, criação do segundo projeto e conferência do checklist. Nenhum projeto foi criado ou publicado automaticamente por esta alteração.
+## Consumo e proteção opcional
 
-## Integrações futuras
+A sincronização mantém 30 segundos em atividade, 120 segundos após um minuto sem interação e pausa em aba oculta ou após cinco minutos inativa. Recuperar foco atualiza imediatamente. Uma revisão inalterada retorna 304, mas ainda utiliza Function/banco.
 
-Domínio, persistência, HTTP e componentes permanecem separados. WhatsApp Business e IA devem entrar por endpoints de servidor com assinatura de webhooks, idempotência e fila persistente. Credenciais continuam fora do navegador; trabalhadores não devem depender de um processo permanente dentro de uma Function. Resposta manual deverá pausar a IA por conversa atomicamente. Nenhum envio de WhatsApp ou atendimento automatizado foi ativado nesta etapa.
+No modo demo, além da leitura do snapshot, uma consulta SQL atualiza contadores compartilhados entre instâncias. Limites por minuto: 300 leituras/120 gravações por identificador e 2.400 leituras/600 gravações globais. No Netlify, o identificador deriva do IP de conexão informado pela plataforma, armazenado como hash; sem essa informação usa um grupo compartilhado. Fora do Netlify, o limite é compartilhado localmente. Excesso retorna 429 com `Retry-After: 60`. Contadores antigos são removidos durante requisições. Não há confiança em `X-Forwarded-For` enviado pelo navegador.
+
+Monitore créditos de Functions, build, Database e armazenamento do histórico, que guarda snapshots completos. Franquias comerciais podem mudar; não há promessa de uso ilimitado ou custo sempre zero.
+
+Para voltar à proteção compartilhada sem reconstruir a UI, configure `CRM_ACCESS_MODE=basic`, `CRM_BASIC_USER`, senha aleatória de pelo menos 16 caracteres em `CRM_BASIC_PASSWORD` e a origem HTTPS. A caixa nativa do navegador voltará a pedir credenciais. Não é autenticação individual nem controle de permissões. Antes de dados reais ou WhatsApp real, essa demonstração deve passar por uma etapa específica de autenticação, proteção e integração oficial.

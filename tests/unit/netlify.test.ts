@@ -38,9 +38,16 @@ describe("publicação isolada e consumo de sincronização", () => {
       }).status,
     ).toBe(0);
     expect(
+      run({
+        SITE_NAME: "crm-novo",
+        URL: "https://crm-novo.netlify.app",
+        CRM_DEPLOY_V2: "true",
+      }).status,
+    ).toBe(1);
+    expect(
       run({ SITE_NAME: "crm-novo", URL: "https://crm-novo.netlify.app" })
         .status,
-    ).toBe(1);
+    ).toBe(0);
   });
   it("reduz a frequência durante uso e suspende consultas em abas ocultas ou inativas", () => {
     expect(syncInterval(true, 0)).toBe(30000);

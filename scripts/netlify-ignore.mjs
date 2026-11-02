@@ -9,5 +9,11 @@ try {
   // Netlify's ignore convention: zero skips the build; one continues.
   process.exit(0);
 }
-console.log("Segundo projeto: continuar o build.");
+if (process.env.CRM_DEPLOY_V2 !== "true") {
+  console.log(
+    "CRM v2: build ignorado até configurar CRM_DEPLOY_V2=true no segundo projeto de testes.",
+  );
+  process.exit(0);
+}
+console.log("Segundo projeto com publicação v2 habilitada: continuar o build.");
 process.exit(1);

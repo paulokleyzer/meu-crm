@@ -8,6 +8,7 @@ await writeFile(
     `POSTGRES_PASSWORD=${dbPassword}`,
     `DATABASE_URL=postgresql://meu_crm:${dbPassword}@127.0.0.1:55432/meu_crm`,
     `TEST_DATABASE_URL=postgresql://meu_crm:${dbPassword}@127.0.0.1:55432/meu_crm`,
+    "CRM_ACCESS_MODE=demo",
     "CRM_BASIC_USER=crm",
     `CRM_BASIC_PASSWORD=${accessPassword}`,
     "CRM_ALLOWED_ORIGIN=http://127.0.0.1:3000",

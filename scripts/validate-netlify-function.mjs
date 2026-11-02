@@ -22,6 +22,7 @@ try {
   process.env.NETLIFY_DB_URL = await database.start();
   process.env.NETLIFY_DB_DRIVER = "server";
   process.env.NETLIFY = "true";
+  process.env.CRM_ACCESS_MODE = "basic";
   process.env.CRM_BASIC_USER = "fictional-validation";
   process.env.CRM_BASIC_PASSWORD = password;
   process.env.CRM_ALLOWED_ORIGIN = origin;
@@ -61,6 +62,17 @@ try {
   }
   const denied = await invoke("/api/crm", { headers: {} });
   assert.equal(denied.status, 401);
+  process.env.CRM_ACCESS_MODE = "demo";
+  delete headers.authorization;
+  const anonymous = await invoke("/api/crm", { headers: {} });
+  assert.equal(anonymous.status, 200);
+  assert.equal(anonymous.headers.has("www-authenticate"), false);
+  const originDenied = await invoke("/api/crm", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(originDenied.status, 403);
   const initialResponse = await invoke("/api/crm");
   assert.equal(initialResponse.status, 200);
   const initial = await initialResponse.json();
@@ -70,6 +82,59 @@ try {
     company: "Empresa fictícia",
     email: "function@example.com",
     phone: "",
+    createdAt: new Date().toISOString(),
+  });
+  initial.data.businessTypes.push({
+    id: "function-type",
+    name: "Tipo fictício da função",
+  });
+  initial.data.sources.push({
+    id: "function-source",
+    name: "Origem fictícia da função",
+  });
+  initial.data.sellers.push({
+    id: "function-seller",
+    name: "Responsável fictício",
+    active: true,
+  });
+  initial.data.distributionRules.push({
+    id: "function-rule",
+    name: "Regra fictícia",
+    businessTypeId: "function-type",
+    source: "Origem fictícia da função",
+    pipelineId: initial.data.pipelines[0].id,
+    enabled: true,
+    isDefault: false,
+  });
+  initial.data.deals.push({
+    id: "function-deal",
+    title: "Oportunidade fictícia da função",
+    value: 100,
+    customerId: "fictional-function-customer",
+    pipelineId: initial.data.pipelines[0].id,
+    stageId: initial.data.pipelines[0].stages[0].id,
+    businessTypeId: "function-type",
+    source: "Origem fictícia da função",
+    owner: "Responsável fictício",
+    status: "open",
+    priority: "medium",
+    expectedCloseDate: "",
+    notes: "",
+    position: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  initial.data.scheduledActivities.push({
+    id: "function-task",
+    title: "Atividade fictícia da função",
+    type: "meeting",
+    dueAt: "2027-01-02T12:00:00.000Z",
+    customerId: "fictional-function-customer",
+    dealId: "function-deal",
+    owner: "Responsável fictício",
+    completedAt: "",
+    remindBeforeMinutes: 15,
+    notes: "",
     createdAt: new Date().toISOString(),
   });
   const saved = await invoke("/api/crm", {
@@ -99,8 +164,35 @@ try {
     ["fictional-function-customer"],
   );
   assert.equal(sql.rows[0].name, "Cliente fictício da função");
+  assert.equal(reloaded.data.distributionRules[0].name, "Regra fictícia");
+  assert.equal(
+    reloaded.data.scheduledActivities[0].title,
+    "Atividade fictícia da função",
+  );
+  assert.equal(
+    (
+      await database.query(
+        "SELECT business_type_id FROM crm_deals WHERE id='function-deal'",
+      )
+    ).rows[0].business_type_id,
+    "function-type",
+  );
+  assert.equal(
+    (
+      await database.query(
+        "SELECT type FROM crm_scheduled_activities WHERE id='function-task'",
+      )
+    ).rows[0].type,
+    "meeting",
+  );
+  await database.query(
+    "INSERT INTO crm_demo_limits(bucket,window_start,hits) VALUES ('write:global',now(),600) ON CONFLICT(bucket) DO UPDATE SET hits=600,window_start=now()",
+  );
+  const limited = await invoke("/api/crm", { method: "PUT", body: "{}" });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), "60");
   console.log(
-    "Função empacotada: 401, GET, PUT, recuperação SQL e resposta 304 validados com o SDK oficial.",
+    "Função empacotada: modo Basic opcional, demonstração sem senha, origem obrigatória, CRUD v2, recuperação SQL, limite 429 e 304 validados com o SDK oficial.",
   );
 } catch (error) {
   // Next installs an uncaughtException handler; a failed assertion must still

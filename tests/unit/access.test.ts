@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checkAccess } from "@/server/access";
 
+beforeEach(() => vi.stubEnv("CRM_ACCESS_MODE", "basic"));
 afterEach(() => vi.unstubAllEnvs());
 const user = "test-crm",
   password = "fictional-test-password-only";
@@ -103,5 +104,35 @@ describe("proteção do servidor sem tela de login", () => {
     configure();
     vi.stubEnv("CRM_ALLOWED_ORIGIN", "http://crm.example.com");
     expect(checkAccess(request())!.status).toBe(503);
+  });
+});
+
+describe("demonstração sem solicitação de senha", () => {
+  it("permite leitura sem credenciais ou cabeçalho de autenticação", () => {
+    configure();
+    vi.stubEnv("CRM_ACCESS_MODE", "demo");
+    vi.stubEnv("CRM_BASIC_USER", "");
+    vi.stubEnv("CRM_BASIC_PASSWORD", "");
+    expect(checkAccess(new Request(origin + "/api/crm"))).toBeNull();
+  });
+  it("mantém origem e formato exigidos mesmo sem senha", () => {
+    configure();
+    vi.stubEnv("CRM_ACCESS_MODE", "demo");
+    expect(checkAccess(new Request(origin, { method: "PUT" }))?.status).toBe(
+      403,
+    );
+    expect(
+      checkAccess(
+        new Request(origin, {
+          method: "PUT",
+          headers: { origin, "content-type": "application/json" },
+        }),
+      ),
+    ).toBeNull();
+  });
+  it("um modo desconhecido falha fechado", () => {
+    configure();
+    vi.stubEnv("CRM_ACCESS_MODE", "typo");
+    expect(checkAccess(new Request(origin))?.status).toBe(503);
   });
 });

@@ -69,6 +69,24 @@ export function PUT(request: Request) {
       );
     }
     const parsed = writeSchema.safeParse(input);
+    if (
+      input &&
+      typeof input === "object" &&
+      "operation" in input &&
+      input.operation !== "import" &&
+      "data" in input &&
+      input.data &&
+      typeof input.data === "object" &&
+      "schemaVersion" in input.data &&
+      input.data.schemaVersion !== 2
+    )
+      return Response.json(
+        {
+          error:
+            "Atualize a página antes de salvar. Backups anteriores devem ser importados pelo menu.",
+        },
+        { status: 426, headers: apiHeaders },
+      );
     if (!parsed.success)
       return Response.json(
         {

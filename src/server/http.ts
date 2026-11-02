@@ -1,5 +1,6 @@
 import { checkAccess } from "./access";
 import { getPool, releaseRequestPool } from "./database";
+import { DemoLimitExceeded, enforceDemoLimit } from "./demo-limit";
 import {
   IdempotencyConflict,
   PostgresCrmRepository,
@@ -19,8 +20,18 @@ export async function protectedApi(
   let pool: ReturnType<typeof getPool> | undefined;
   try {
     pool = getPool();
+    await enforceDemoLimit(pool, request);
     return await action(new PostgresCrmRepository(pool));
   } catch (error) {
+    if (error instanceof DemoLimitExceeded)
+      return Response.json(
+        {
+          error:
+            "Limite da demonstração atingido. Aguarde um minuto e tente novamente.",
+          code: "DEMO_RATE_LIMIT",
+        },
+        { status: 429, headers: { ...apiHeaders, "Retry-After": "60" } },
+      );
     if (error instanceof RevisionConflict)
       return Response.json(
         {

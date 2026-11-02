@@ -9,11 +9,6 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000",
-    httpCredentials: {
-      send: "always",
-      username: process.env.CRM_BASIC_USER || "",
-      password: process.env.CRM_BASIC_PASSWORD || "",
-    },
     trace: "off",
     screenshot: "only-on-failure",
     launchOptions: {

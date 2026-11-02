@@ -17,6 +17,7 @@ services:
     build: .
     environment:
       DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL com host db e porta 5432}
+      CRM_ACCESS_MODE: ${CRM_ACCESS_MODE:-basic}
       CRM_BASIC_USER: ${CRM_BASIC_USER:?Defina CRM_BASIC_USER}
       CRM_BASIC_PASSWORD: ${CRM_BASIC_PASSWORD:?Defina CRM_BASIC_PASSWORD}
       CRM_ALLOWED_ORIGIN: ${CRM_ALLOWED_ORIGIN:?Defina a origem HTTPS}

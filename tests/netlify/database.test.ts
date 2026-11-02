@@ -9,6 +9,11 @@ import { PostgresCrmRepository } from "@/server/postgres-repository";
 import { createSeedData } from "@/lib/seed";
 import { moveDeal } from "@/lib/crm";
 import { migrate } from "@/server/migrate";
+import {
+  saveCatalog,
+  saveDistributionRule,
+  saveScheduledActivity,
+} from "@/lib/crm-v2";
 
 let directory: string;
 let db: NetlifyDB;
@@ -29,7 +34,12 @@ it("aplica as migrações com o runner oficial, sem Docker, de forma repetível"
     await db.applyMigrations(
       join(process.cwd(), "netlify/database/migrations"),
     ),
-  ).toEqual(["001_crm", "002_snapshot"]);
+  ).toEqual([
+    "001_crm",
+    "002_snapshot",
+    "003_crm_v2",
+    "004_whatsapp_foundation",
+  ]);
   expect(
     await db.applyMigrations(
       join(process.cwd(), "netlify/database/migrations"),
@@ -75,6 +85,42 @@ it("impede misturar o runner legado com migrações oficiais já aplicadas", asy
     await releaseRequestPool(pool);
   }
 });
+it("salva configurações, regras e agenda com o SDK oficial", async () => {
+  const pool = getPool();
+  try {
+    const repo = new PostgresCrmRepository(pool),
+      base = await repo.load();
+    let data = saveCatalog(base.data, "businessTypes", "Construção fictícia");
+    data = saveCatalog(data, "sources", "Tráfego fictício");
+    data = saveCatalog(data, "sellers", "Paula fictícia");
+    data = saveDistributionRule(data, {
+      name: "Distribuição persistida",
+      businessTypeId: data.businessTypes[0].id,
+      source: "Tráfego fictício",
+      pipelineId: "pipeline-partners",
+      enabled: true,
+      isDefault: false,
+    });
+    data = saveScheduledActivity(data, {
+      title: "Agenda persistida",
+      type: "call",
+      dueAt: "2027-01-02T12:00:00.000Z",
+      dealId: "deal-0",
+      customerId: "customer-0",
+      owner: "Paula fictícia",
+      notes: "",
+      remindBeforeMinutes: 15,
+    });
+    await repo.save({
+      data,
+      baseRevision: base.revision,
+      requestId: randomUUID(),
+      operation: "change",
+    });
+  } finally {
+    await releaseRequestPool(pool);
+  }
+});
 it("recupera os dados após parar e reabrir o Netlify Database local", async () => {
   await db.stop();
   db = new NetlifyDB({ directory, logger: () => undefined });
@@ -86,6 +132,14 @@ it("recupera os dados após parar e reabrir o Netlify Database local", async () 
       stageId: "partner-meeting",
       pipelineId: "pipeline-partners",
     });
+    expect(state.data.businessTypes[0].name).toBe("Construção fictícia");
+    expect(state.data.distributionRules[0].name).toBe(
+      "Distribuição persistida",
+    );
+    expect(state.data.scheduledActivities[0].title).toBe("Agenda persistida");
+    expect(state.data.sellers.some((s) => s.name === "Paula fictícia")).toBe(
+      true,
+    );
     expect(
       await new PostgresCrmRepository(pool).loadIfChanged(state.revision),
     ).toBeNull();

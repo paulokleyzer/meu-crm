@@ -2607,3 +2607,237 @@ h1 {
     scroll-behavior: auto !important;
   }
 }
+
+/* CRM v2 additions reuse the existing palette, surfaces and controls. */
+.section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.settings-panel {
+  background: #fff;
+  border: 1px solid var(--border, #e3e8e6);
+  border-radius: 14px;
+  padding: 24px;
+  min-width: 0;
+}
+.settings-panel .panel-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.settings-view .muted,
+.activities-view .muted,
+.insights-panel .muted {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e3e8e6;
+  border-radius: 10px;
+  background: white;
+}
+.settings-row p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #586c61;
+  margin: 6px 0;
+}
+.settings-row h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.rule-row {
+  align-items: flex-start;
+}
+.check-field {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+.check-field input {
+  width: 17px;
+  height: 17px;
+  accent-color: #12805e;
+}
+.simulator .form-stack {
+  max-width: 620px;
+  margin-top: 24px;
+}
+.activity-filters {
+  margin: 22px 0;
+  max-width: 700px;
+}
+.activity-badge {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #eaf6ef;
+  color: #176044;
+}
+.activity-badge.overdue {
+  background: #fff0eb;
+  color: #ae3d20;
+}
+.agenda-row.overdue {
+  border-left: 3px solid #cf6146;
+}
+.agenda-row.completed {
+  opacity: 0.8;
+}
+.agenda-row time {
+  font-size: 13px;
+}
+.customer-card-wrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.customer-card-wrap .customer-card {
+  width: 100%;
+  flex: 1;
+}
+.whatsapp-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #146b4c;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px;
+  border: 1px solid #dcece3;
+  border-radius: 8px;
+  background: #f4fbf7;
+  margin-top: 7px;
+  text-decoration: none;
+}
+.whatsapp-link:hover {
+  background: #e4f6eb;
+}
+.pipeline-drop-targets {
+  position: fixed;
+  top: 76px;
+  left: 110px;
+  right: 20px;
+  z-index: 40;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  overflow-x: auto;
+  padding: 12px;
+  border: 1px solid #9cceba;
+  border-radius: 12px;
+  background: #f1fcf6;
+  box-shadow: 0 5px 22px #162c231a;
+  font-size: 13px;
+}
+.pipeline-drop-targets > span {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.pipeline-drop-target {
+  padding: 14px 18px;
+  border: 2px dashed #76bda0;
+  border-radius: 8px;
+  flex-shrink: 0;
+  color: #145e44;
+}
+.pipeline-drop-target.drop-target {
+  background: #bfead6;
+  border-style: solid;
+}
+.results-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 650px;
+}
+.results-table th,
+.results-table td {
+  padding: 13px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e8ede9;
+}
+.results-table th {
+  font-weight: 600;
+}
+.insight-stats.v2-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.filters-panel {
+  flex-wrap: wrap;
+}
+@media (max-width: 1000px) {
+  .insight-stats.v2-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .settings-panel {
+    padding: 16px;
+  }
+  .settings-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .settings-row .row-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  .section-tabs .button {
+    font-size: 12px;
+    padding: 9px;
+  }
+  .insight-stats.v2-stats {
+    grid-template-columns: 1fr;
+  }
+  .pipeline-drop-targets {
+    left: 8px;
+    right: 8px;
+    top: 65px;
+  }
+  .pipeline-drop-targets > span {
+    display: none;
+  }
+  .sidebar nav .nav-item {
+    min-width: 0;
+    flex: 1;
+    font-size: 10px;
+  }
+}
+.settings-view .eyebrow,
+.activities-view .eyebrow {
+  color: #53685c;
+}
+
+.activities-view .empty-state h2 {
+  color: var(--ink);
+}

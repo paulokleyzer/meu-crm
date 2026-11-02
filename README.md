@@ -1,70 +1,64 @@
-# Meu CRM
+# Meu CRM v2
 
-CRM web em React, TypeScript e Next.js, com interface de funis inspirada no Pipedrive, cartões dnd-kit e persistência centralizada em PostgreSQL.
+CRM web em React, TypeScript e Next.js, com funis inspirados no Pipedrive e PostgreSQL pelo SDK oficial Netlify Database.
 
-A branch **`feat/crm-netlify`**, baseada em `feat/crm-postgres`, prepara a aplicação para um **segundo projeto Netlify**, com o SDK oficial Netlify Database e API protegida em Functions. A interface, a navegação e os funis existentes foram preservados. Não exige VPS, Supabase ou Docker para usar esta implantação.
+A branch **`feat/crm-v2`** parte de `feat/crm-netlify` (`42de3fe`). Preserva os funis independentes, etapas personalizáveis, dnd-kit, ordem dos cartões, cadastro manual e sincronização. Acrescenta configurações comerciais, distribuição automática opcional, agenda e indicadores.
 
-**O site antigo `lucky-donut-3d0c63.netlify.app` permanece independente. Não vincule esta branch àquele projeto.** Nenhuma publicação é executada pelo código ou pelos testes. O ZIP em `deploy/` é a versão estática anterior e não deve ser usado para a versão PostgreSQL.
+**Esta é uma demonstração compartilhada sem senha. Use somente dados fictícios.** Qualquer pessoa com a URL pode consultar e alterar os dados. Validação, origem, limites e concorrência reduzem abusos, mas não são autenticação. A proteção Basic continua disponível por configuração do servidor, sem tela de login.
 
-## Publicar no segundo projeto Netlify
+O site **`lucky-donut-3d0c63.netlify.app`**, `main` e as branches anteriores permanecem independentes. Não publique esta versão no projeto antigo. Nenhum comando de teste faz deploy.
 
-O [guia Netlify](docs/netlify.md) detalha cada passo: importar `paulokleyzer/meu-crm` do GitHub como um projeto novo, selecionar `feat/crm-netlify`, configurar acesso, ativar o Database, aplicar migrações e conferir a nova URL.
+## Executar sem Docker
 
-Configuração versionada: build `npm run build:netlify`, publish `.next`, Node.js 24 e adaptador oficial Next.js. Defina `CRM_BASIC_USER`, `CRM_BASIC_PASSWORD` e `CRM_ALLOWED_ORIGIN` no **novo projeto**, antes de usá-lo. O Netlify fornece `NETLIFY_DB_URL` ao SDK; nunca coloque credenciais em `NEXT_PUBLIC_*`.
-
-Provisionamento e publicação hospedados precisam ser validados na conta do Netlify. Os testes locais e o empacotamento oficial não substituem essa conferência.
-
-## Início rápido sem Docker
-
-Requisitos: Node.js 24 LTS e npm.
+Requisitos: Node.js 24 LTS, npm e Chromium para os testes de navegador.
 
 ```bash
-git switch feat/crm-netlify
+git switch feat/crm-v2
 npm ci
 npm run setup:netlify
 npm run netlify:db:migrate
 npm run netlify:dev
 ```
 
-Abra **http://localhost:8888** na máquina que executou os comandos. A caixa HTTP Basic do navegador usa as credenciais de `.env.local`, geradas pelo setup. Não há tela de login ou níveis de acesso dentro do CRM. A API permanece fechada sem proteção configurada.
+Abra **http://localhost:8888** no computador que executou os comandos. Não há solicitação de senha. O Netlify Dev usa seu banco local oficial, persistido em `.netlify/db`; não precisa de VPS, Supabase ou Docker.
 
-O Netlify Dev usa o banco local oficial e persiste em `.netlify/db`. O setup não sobrescreve um `.env.local` existente; configure a origem para `http://localhost:8888` se vier da instalação anterior. Não abra pela porta interna 3000 neste modo.
+O setup não sobrescreve `.env.local`. Se já existir, use `CRM_ACCESS_MODE=demo` e `CRM_ALLOWED_ORIGIN=http://localhost:8888` para este modo. O banco local não é enviado à nuvem automaticamente. O [guia Netlify](docs/netlify.md) explica a configuração e a publicação no segundo projeto.
 
-## Fluxos disponíveis
+## Funcionalidades
 
-- Criar, editar, duplicar e excluir funis; configurar e reorganizar etapas.
-- Arrastar cartões com mouse, toque ou teclado, inclusive para colunas vazias.
-- Cadastrar clientes e oportunidades, editar detalhes, registrar atividades, ganhos e perdas.
-- Pesquisar e filtrar negócios, alternar quadro/lista e consultar indicadores.
-- Persistir no PostgreSQL, recuperar em outro dispositivo e tratar conflitos de revisão.
-- Importar/exportar backup JSON v1, preservando IDs e funis da versão anterior.
+- Funis e etapas: criar, editar, duplicar, excluir, reorganizar e transferir negócios sem perda.
+- Cartões: arraste com mouse, toque ou teclado, inclusive para etapas vazias. Durante o arraste, os destinos de outros funis aparecem no topo; soltar em um deles envia à primeira etapa daquele funil.
+- **Configurações**: tipos de negócio e origens livres; vendedores/responsáveis persistidos, com edição e desativação.
+- **Regras de distribuição**: condições independentes de tipo/origem, prioridade, ativação, regra padrão e simulador interno. Na oportunidade, escolha manualmente o funil ou aplique as regras. Alterar regras não movimenta negócios existentes automaticamente.
+- **Atividades**: tarefas, ligações, reuniões e retornos, com data/horário, cliente, oportunidade, responsável, conclusão, reabertura e filtros de agenda. Cartões mostram atraso; lembretes aparecem dentro do CRM aberto.
+- **WhatsApp**: atalho oficial `wa.me` para telefones válidos. Não há conexão de mensagens, chat simulado ou envio automático.
+- **Dashboard**: abertos, ganhos, perdidos, valores e conversão por funil, origem, tipo e responsável.
+- Backups JSON v2 e importação de v1, transações, idempotência, revisão global, conflitos e sincronização entre dispositivos.
 
-Exclusões de etapas/funis preservam oportunidades por transferência. Gravações são confirmadas após uma transação no banco. Falhas não caem silenciosamente para armazenamento local. Sincronização usa ETag/304, intervalos de 30/120 segundos conforme atividade e pausa em abas ocultas ou inativas. Não há mesclagem automática de edições simultâneas.
+O [guia da v2](docs/crm-v2.md) descreve regras, agenda, compatibilidade e a preparação para a API oficial do WhatsApp. O [guia de arquitetura](docs/architecture.md) detalha a persistência. A opção de servidor próprio continua documentada em [PostgreSQL/Hostinger VPS](docs/postgres.md).
 
 ## Verificar
 
 ```bash
-npm run check                # lint, tipos, testes unitários e build
-npm run test:netlify:db      # SDK, migrações oficiais e recuperação sem Docker
-npm run test:netlify:package # adaptador/função empacotada; exige Deno e rede
-npm run test:db             # PostgreSQL nativo exclusivo de testes
-npm run test:e2e            # UI protegida, drag and drop e API em loopback
+npm run check
+npm run test:netlify:db
+npm run test:netlify:package
+npm run test:db
 npm run format:check
 ```
 
-Leia os [comandos e limites dos testes Netlify](docs/netlify.md#testes-e-limites-da-validação). E2E exige Chromium e `CRM_E2E_ALLOW_RESET=true` em banco local fictício; para o Netlify Dev informe `PLAYWRIGHT_BASE_URL=http://localhost:8888`. Nunca execute contra produção. Há CI com PostgreSQL e o banco local oficial do Netlify.
+`test:db` requer `TEST_DATABASE_URL` de um PostgreSQL de testes. `test:netlify:db` usa o banco local oficial sem Docker. O teste de empacotamento usa o adaptador oficial, Deno e uma cópia temporária; não cria projeto nem publica.
 
-Os resultados e as verificações que ainda dependem do serviço hospedado estão no [registro de validação](docs/netlify-validation.md).
+Com o Netlify Dev aberto, use outro terminal:
 
-## Estrutura
+```bash
+CRM_E2E_ALLOW_RESET=true PLAYWRIGHT_BASE_URL=http://localhost:8888 npm run test:e2e
+```
 
-- `src/components/`: interface e quadro originais.
-- `src/lib/crm.ts`: operações de domínio e transferências.
-- `src/hooks/use-crm.ts`: gravação assíncrona, estado confirmado e sincronização.
-- `src/lib/http-repository.ts`: HTTP, revisão e repetição idempotente de falhas de rede.
-- `src/app/api/crm/`: dados e histórico no servidor.
-- `src/server/`: acesso, transações, SDK/pool e escrita incremental PostgreSQL.
-- `netlify/database/migrations/`: migrações SQL oficiais.
-- `tests/`: domínio, SQL nativo, SDK Netlify e navegador.
+Instale o Chromium (`npx playwright install --with-deps chromium`) ou informe `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. E2E restaura dados fictícios e só aceita loopback; nunca execute contra produção. Há CI com PostgreSQL e o banco oficial local. Resultados e limitações constam no [registro de validação](docs/netlify-validation.md).
 
-O [guia de arquitetura](docs/architecture.md) descreve as decisões e limites. A instalação alternativa em servidor próprio continua documentada em [PostgreSQL/Hostinger VPS](docs/postgres.md). WhatsApp, IA, autenticação individual e níveis de acesso são etapas futuras.
+## Publicação
+
+Use somente o **segundo projeto de testes** no Netlify, com a branch `feat/crm-v2`, build `npm run build:netlify`, publish `.next` e Node.js 24. A regra `build.ignore` pula builds até você definir **`CRM_DEPLOY_V2=true` nesse projeto**. O nome/endereço do projeto antigo continua bloqueado mesmo com essa variável.
+
+O [passo a passo](docs/netlify.md) explica as variáveis, migrações e conferência da nova URL. Publicação/provisionamento hospedados dependem da sua conta e não são comprovados apenas pelos testes locais. Nenhuma publicação automática foi realizada nesta tarefa.

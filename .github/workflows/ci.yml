@@ -2,7 +2,8 @@ name: Validar CRM
 
 on:
   push:
-    branches: [main, feat/crm-v1, feat/crm-postgres, feat/crm-netlify]
+    branches:
+      [main, feat/crm-v1, feat/crm-postgres, feat/crm-netlify, feat/crm-v2]
   pull_request:
     branches: [main]
 
@@ -28,6 +29,7 @@ jobs:
       CRM_BASIC_USER: ci-crm-test
       CRM_BASIC_PASSWORD: ci-fictional-access-only
       CRM_ALLOWED_ORIGIN: http://127.0.0.1:3000
+      CRM_ACCESS_MODE: demo
       CRM_E2E_ALLOW_RESET: "true"
     steps:
       - uses: actions/checkout@v4

@@ -12,6 +12,18 @@ import {
 } from "@/server/postgres-repository";
 import { createSeedData } from "@/lib/seed";
 import {
+  saveCatalog,
+  saveDistributionRule,
+  saveScheduledActivity,
+  simulateIntake,
+} from "@/lib/crm-v2";
+import { enforceDemoLimit, DemoLimitExceeded } from "@/server/demo-limit";
+import {
+  recordVerifiedWhatsAppEvent,
+  resumeConversationAI,
+  ConversationVersionConflict,
+} from "@/server/whatsapp";
+import {
   deletePipeline,
   moveDeal,
   saveCustomer,
@@ -71,8 +83,8 @@ describe("PostgreSQL real: persistência, concorrência e recuperação", () => 
         "INSERT INTO crm_customers(id,name,created_at) VALUES ('legacy-customer','Cliente fictício anterior','2026-01-02T03:04:05.123Z')",
       );
       await legacy.query(
-        `INSERT INTO crm_deals(id,title,value,customer_id,pipeline_id,stage_id,status,priority,owner,position,created_at,updated_at,expected_close_date)
-         VALUES ('legacy-deal','Oportunidade fictícia anterior',1234.56,'legacy-customer','pipeline-sales','stage-lead','open','medium','Equipe fictícia',0,'2026-01-02T03:04:05.123Z','2026-01-02T03:04:05.123Z','2026-03-04')`,
+        `INSERT INTO crm_deals(id,title,value,customer_id,pipeline_id,stage_id,status,priority,owner,position,created_at,updated_at,expected_close_date,source)
+         VALUES ('legacy-deal','Oportunidade fictícia anterior',1234.56,'legacy-customer','pipeline-sales','stage-lead','open','medium','Equipe fictícia',0,'2026-01-02T03:04:05.123Z','2026-01-02T03:04:05.123Z','2026-03-04','Origem legada livre')`,
       );
       await legacy.query(
         "INSERT INTO crm_activities VALUES ('legacy-activity','legacy-deal','Atividade fictícia anterior','2026-01-02T03:04:05.123Z',0)",
@@ -81,6 +93,9 @@ describe("PostgreSQL real: persistência, concorrência e recuperação", () => 
       await migrate(legacy);
       const recovered = await new PostgresCrmRepository(legacy).load();
       expect(recovered.revision).toBe(7);
+      expect(recovered.data.sources[0].name).toBe("Origem legada livre");
+      expect(recovered.data.sellers[0].name).toBe("Equipe fictícia");
+      expect(recovered.data.schemaVersion).toBe(2);
       expect(recovered.data.customers[0].createdAt).toBe(
         "2026-01-02T03:04:05.123Z",
       );
@@ -315,5 +330,162 @@ describe("PostgreSQL real: persistência, concorrência e recuperação", () => 
     );
     expect(history.rows[0].before_data.pipelines).toHaveLength(2);
     expect(history.rows[0].after_data.pipelines).toHaveLength(1);
+  });
+  it("persiste categorias, origens, responsáveis, regras e agenda nas tabelas e no snapshot", async () => {
+    const base = await seed();
+    let data = saveCatalog(base.data, "businessTypes", "Energia de teste");
+    data = saveCatalog(data, "sources", "Campanha de teste");
+    data = saveCatalog(data, "sellers", "Vendedor de teste");
+    const businessTypeId = data.businessTypes[0].id;
+    data = saveDistributionRule(data, {
+      name: "Regra de teste",
+      businessTypeId,
+      source: "Campanha de teste",
+      pipelineId: "pipeline-partners",
+      enabled: true,
+      isDefault: false,
+    });
+    data = simulateIntake(data, {
+      name: "Contato fictício de banco",
+      businessTypeId,
+      source: "Campanha de teste",
+    });
+    const deal = data.deals.at(-1)!;
+    data = saveScheduledActivity(data, {
+      title: "Reunião fictícia",
+      type: "meeting",
+      customerId: deal.customerId,
+      dealId: deal.id,
+      owner: "Vendedor de teste",
+      dueAt: "2027-02-03T12:30:00.000Z",
+      notes: "Somente teste",
+      remindBeforeMinutes: 30,
+    });
+    const saved = await repo.save({
+      data,
+      baseRevision: base.revision,
+      requestId: randomUUID(),
+      operation: "change",
+    });
+    expect((await repo.load()).data).toEqual(saved.data);
+    expect(
+      (
+        await pool.query(
+          "SELECT business_type_id,source FROM crm_deals WHERE id=$1",
+          [deal.id],
+        )
+      ).rows[0],
+    ).toMatchObject({
+      business_type_id: businessTypeId,
+      source: "Campanha de teste",
+    });
+    expect(
+      (await pool.query("SELECT name FROM crm_distribution_rules")).rows[0]
+        .name,
+    ).toBe("Regra de teste");
+    expect(
+      (await pool.query("SELECT title,owner FROM crm_scheduled_activities"))
+        .rows[0],
+    ).toMatchObject({ title: "Reunião fictícia", owner: "Vendedor de teste" });
+    const physical = (await pool.query("SELECT crm_build_snapshot() AS data"))
+      .rows[0].data;
+    expect(physical.scheduledActivities[0]).toEqual(
+      saved.data.scheduledActivities[0],
+    );
+    expect(physical.businessTypes).toEqual(saved.data.businessTypes);
+  });
+  it("aplica limite público compartilhado e atômico, inclusive entre conexões simultâneas", async () => {
+    vi.stubEnv("CRM_ACCESS_MODE", "demo");
+    try {
+      await pool.query(
+        "INSERT INTO crm_demo_limits VALUES ('write:global',now(),599)",
+      );
+      const attempts = await Promise.allSettled(
+        [0, 1].map(() =>
+          enforceDemoLimit(
+            pool,
+            new Request("http://127.0.0.1:3000/api/crm", { method: "PUT" }),
+          ),
+        ),
+      );
+      expect(attempts.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      const denied = attempts.find(
+        (r) => r.status === "rejected",
+      ) as PromiseRejectedResult;
+      expect(denied.reason).toBeInstanceOf(DemoLimitExceeded);
+      await pool.query(
+        "UPDATE crm_demo_limits SET window_start=now()-interval '2 minutes'",
+      );
+      await expect(
+        enforceDemoLimit(
+          pool,
+          new Request("http://127.0.0.1:3000/api/crm", { method: "PUT" }),
+        ),
+      ).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+      await pool.query("DELETE FROM crm_demo_limits");
+    }
+  });
+  it("prepara histórico oficial e pausa persistente da IA sem conectar o WhatsApp", async () => {
+    const event = {
+      eventId: "fictional-event-1",
+      messageId: "fictional-message-1",
+      externalContactId: "fictional-contact-only",
+      direction: "incoming" as const,
+      senderKind: "customer" as const,
+      body: "Mensagem fictícia de teste",
+      occurredAt: "2026-01-02T12:00:00.000Z",
+    };
+    const first = await recordVerifiedWhatsAppEvent(pool, event);
+    expect((await recordVerifiedWhatsAppEvent(pool, event)).duplicate).toBe(
+      true,
+    );
+    expect(
+      Number(
+        (await pool.query("SELECT count(*) FROM crm_messages")).rows[0].count,
+      ),
+    ).toBe(1);
+    await resumeConversationAI(pool, first.conversationId, 1);
+    await recordVerifiedWhatsAppEvent(pool, {
+      ...event,
+      eventId: "human-echo-2",
+      messageId: "human-message-2",
+      direction: "outgoing",
+      senderKind: "human",
+    });
+    expect(
+      (
+        await pool.query(
+          "SELECT ai_paused,ai_pause_reason FROM crm_conversations WHERE id=$1",
+          [first.conversationId],
+        )
+      ).rows[0],
+    ).toMatchObject({ ai_paused: true, ai_pause_reason: "human_reply" });
+    await recordVerifiedWhatsAppEvent(pool, {
+      ...event,
+      eventId: "incoming-3",
+      messageId: "message-3",
+    });
+    expect(
+      (
+        await pool.query(
+          "SELECT ai_paused FROM crm_conversations WHERE id=$1",
+          [first.conversationId],
+        )
+      ).rows[0].ai_paused,
+    ).toBe(true);
+    await expect(
+      resumeConversationAI(pool, first.conversationId, 2),
+    ).rejects.toBeInstanceOf(ConversationVersionConflict);
+    await resumeConversationAI(pool, first.conversationId, 4);
+    expect(
+      (
+        await pool.query(
+          "SELECT ai_paused FROM crm_conversations WHERE id=$1",
+          [first.conversationId],
+        )
+      ).rows[0].ai_paused,
+    ).toBe(false);
   });
 });

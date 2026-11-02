@@ -198,6 +198,7 @@ export function createSeedData(): CrmData {
       priority,
       owner,
       source: i % 2 === 0 ? "Indicação" : "Site",
+      businessTypeId: "",
       expectedCloseDate: date(offset),
       notes:
         "Oportunidade fictícia para explorar o CRM. Edite os detalhes e acompanhe a evolução nas etapas.",
@@ -225,7 +226,16 @@ export function createSeedData(): CrmData {
     position: 0,
   });
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    businessTypes: [],
+    sources: [...new Set(deals.map((d) => d.source))]
+      .sort()
+      .map((name, i) => ({ id: `seed-source-${i}`, name })),
+    sellers: [...new Set(deals.map((d) => d.owner))]
+      .sort()
+      .map((name, i) => ({ id: `seed-seller-${i}`, name, active: true })),
+    distributionRules: [],
+    scheduledActivities: [],
     pipelines,
     customers,
     deals,

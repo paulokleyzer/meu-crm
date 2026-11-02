@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { request as rawRequest } from "node:http";
 import { createSeedData } from "../../src/lib/seed";
+import { legacyBackup } from "../legacy-backup";
 
 test.beforeEach(async ({ request, baseURL }) => {
   if (
@@ -30,10 +31,6 @@ test("sincroniza dois dispositivos e impede salvar um formulário antigo sobre a
   await page.goto("/");
   const context = await browser.newContext({
     baseURL,
-    httpCredentials: {
-      username: process.env.CRM_BASIC_USER!,
-      password: process.env.CRM_BASIC_PASSWORD!,
-    },
   });
   try {
     const second = await context.newPage();
@@ -80,7 +77,7 @@ test("sincroniza dois dispositivos e impede salvar um formulário antigo sobre a
   }
 });
 
-test("API protege leitura, exige origem válida e rejeita conflitos sem perder dados", async ({
+test("API permite demonstração pública, exige origem válida e rejeita conflitos sem perder dados", async ({
   request,
   baseURL,
 }) => {
@@ -97,7 +94,7 @@ test("API protege leitura, exige origem válida e rejeita conflitos sem perder d
       raw.on("error", reject);
       raw.end();
     });
-    expect(status).toBe(401);
+    expect(status).toBe(method === "GET" ? 200 : 403);
   }
   const state = await (await request.get("/api/crm")).json();
   const payload = {
@@ -179,7 +176,7 @@ test("importa backup JSON v1 preservando funis personalizados e registra auditor
   page,
   request,
 }) => {
-  const legacy = createSeedData();
+  const legacy = legacyBackup();
   legacy.pipelines[0].name = "Funil personalizado importado";
   legacy.pipelines[0].stages[0].name = "Etapa legada";
   await page.goto("/");

@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
   ArrowUpFromLine,
   BarChart3,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
@@ -40,8 +41,9 @@ import type {
   DealInput,
   Pipeline,
   PipelineInput,
+  ScheduledActivity,
 } from "@/lib/types";
-import { OWNERS } from "@/lib/types";
+import { activityStatus } from "@/lib/crm-v2";
 import {
   createPipeline,
   deleteDeal,
@@ -73,6 +75,8 @@ import { CustomerDialog } from "./customer-dialog";
 import { CustomersView } from "./customers-view";
 import { DealList } from "./deal-list";
 import { InsightsView } from "./insights-view";
+import { SettingsView } from "./settings-view";
+import { ActivitiesView, ActivityDialog } from "./activities-view";
 
 const defaultFilters: DealFilters = {
   query: "",
@@ -81,7 +85,7 @@ const defaultFilters: DealFilters = {
   status: "open",
   due: "",
 };
-type Section = "deals" | "customers" | "insights";
+type Section = "deals" | "customers" | "insights" | "activities" | "settings";
 type Update = UpdateCrm;
 
 export function CrmApp() {
@@ -123,6 +127,36 @@ function Workspace({
   saving: boolean;
 }) {
   const [section, setSection] = useState<Section>("deals");
+  const [activityDialog, setActivityDialog] = useState<{
+    activity?: ScheduledActivity;
+    dealId?: string;
+  } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const reminded = useRef(new Set<string>());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (document.visibilityState !== "visible") return;
+    const due = data.scheduledActivities.filter(
+      (t) =>
+        ["overdue", "reminder"].includes(activityStatus(t, now)) &&
+        !reminded.current.has(`${t.id}:${t.dueAt}`),
+    );
+    if (due.length) {
+      due.forEach((t) => reminded.current.add(`${t.id}:${t.dueAt}`));
+      toast.info(
+        `${due.length} atividade(s) precisam de atenção. Confira a agenda no CRM.`,
+        {
+          action: {
+            label: "Ver atividades",
+            onClick: () => setSection("activities"),
+          },
+        },
+      );
+    }
+  }, [data.scheduledActivities, now]);
   const [pipelineId, setPipelineId] = useState(data.pipelines[0].id);
   const [view, setView] = useState<"board" | "list">("board");
   const [filters, setFilters] = useState<DealFilters>(defaultFilters);
@@ -152,6 +186,8 @@ function Workspace({
     data.pipelines.find((p) => p.id === pipelineId) || data.pipelines[0];
   const deals = filterDeals(data, pipeline.id, filters);
   const activeFilters =
+    Number(!!filters.businessTypeId) +
+    Number(!!filters.source) +
     Number(!!filters.owner) +
     Number(!!filters.priority) +
     Number(!!filters.due) +
@@ -307,7 +343,9 @@ function Workspace({
             [
               { id: "deals", icon: FolderKanban, label: "Funis" },
               { id: "customers", icon: Users, label: "Clientes" },
+              { id: "activities", icon: CalendarDays, label: "Atividades" },
               { id: "insights", icon: BarChart3, label: "Visão geral" },
+              { id: "settings", icon: Settings2, label: "Configurações" },
             ] as const
           ).map(({ id, icon: Icon, label }) => (
             <button
@@ -344,7 +382,7 @@ function Workspace({
           >
             <div className="menu-profile">
               <strong>Meu espaço de trabalho</strong>
-              <span>PostgreSQL · acesso protegido</span>
+              <span>PostgreSQL · demonstração compartilhada</span>
             </div>
             <MenuSeparator />
             <MenuItem onSelect={exportBackup}>
@@ -378,11 +416,18 @@ function Workspace({
                 ? "Funis"
                 : section === "customers"
                   ? "Clientes"
-                  : "Visão geral"}
+                  : section === "activities"
+                    ? "Atividades"
+                    : section === "settings"
+                      ? "Configurações"
+                      : "Visão geral"}
             </strong>
           </div>
           <div className="topbar-actions">
-            <span className="demo-badge">
+            <span
+              className="demo-badge"
+              title="Base compartilhada de demonstração. Use somente dados fictícios."
+            >
               <span /> Modo demonstração
             </span>
             <IconButton
@@ -632,11 +677,42 @@ function Workspace({
                         <option value="">Todos os responsáveis</option>
                         {Array.from(
                           new Set([
-                            ...OWNERS,
+                            ...data.sellers.map((s) => s.name),
                             ...data.deals.map((d) => d.owner),
                           ]),
                         ).map((o) => (
                           <option key={o}>{o}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Tipo de negócio">
+                      <select
+                        value={filters.businessTypeId || ""}
+                        onChange={(e) =>
+                          setFilters({
+                            ...filters,
+                            businessTypeId: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">Todos os tipos</option>
+                        {data.businessTypes.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Origem comercial">
+                      <select
+                        value={filters.source || ""}
+                        onChange={(e) =>
+                          setFilters({ ...filters, source: e.target.value })
+                        }
+                      >
+                        <option value="">Todas as origens</option>
+                        {data.sources.map((o) => (
+                          <option key={o.id}>{o.name}</option>
                         ))}
                       </select>
                     </Field>
@@ -726,7 +802,7 @@ function Workspace({
                     onMove={async (id, stageId, beforeId, editToken) => {
                       await apply(
                         (d) => moveDeal(d, id, stageId, beforeId),
-                        `Oportunidade atualizada · ${pipeline.stages.find((s) => s.id === stageId)?.name}`,
+                        `Oportunidade atualizada · ${data.pipelines.flatMap((p) => p.stages).find((s) => s.id === stageId)?.name}`,
                         { editToken },
                       );
                     }}
@@ -764,6 +840,28 @@ function Workspace({
             />
           )}
           {section === "insights" && <InsightsView data={data} />}
+          {section === "settings" && (
+            <SettingsView data={data} update={update} />
+          )}
+          {section === "activities" && (
+            <ActivitiesView
+              data={data}
+              update={update}
+              now={now}
+              onSchedule={(activity) => setActivityDialog({ activity })}
+            />
+          )}
+          {(section === "settings" || section === "activities") && (
+            <footer className="workspace-footer">
+              <span role="status">
+                {storageError
+                  ? "Gravação não confirmada"
+                  : saving
+                    ? "Salvando no PostgreSQL…"
+                    : "Salvo no PostgreSQL"}
+              </span>
+            </footer>
+          )}
         </main>
       </div>
       {pipelineEditor && (
@@ -783,6 +881,7 @@ function Workspace({
           pipelineId={pipeline.id}
           stageId={dealDialog.stageId}
           onClose={() => setDealDialog(null)}
+          onSchedule={(deal) => setActivityDialog({ dealId: deal.id })}
           onSave={handleDealSave}
           onDelete={(deal) =>
             setConfirm({ kind: "deal", id: deal.id, editToken: getEditToken() })
@@ -790,6 +889,15 @@ function Workspace({
           onSaveCustomer={(input, token) =>
             handleCustomerSave(input, undefined, token)
           }
+        />
+      )}
+      {activityDialog && (
+        <ActivityDialog
+          data={data}
+          activity={activityDialog.activity}
+          dealId={activityDialog.dealId}
+          update={update}
+          onClose={() => setActivityDialog(null)}
         />
       )}
       {customerDialog && (
@@ -1025,12 +1133,14 @@ function Workspace({
           open
           onOpenChange={(open) => !open && setImportData(null)}
           title="Restaurar este backup?"
-          description="Os dados compartilhados no banco serão substituídos pelos dados do arquivo. Exporte um backup antes de continuar."
+          description="O arquivo substituirá os dados compartilhados, incluindo configurações, regras e agenda. Exporte um backup antes de continuar."
         >
           <div className="dialog-body form-stack">
             <p>
               {importData.pipelines.length} funis, {importData.customers.length}{" "}
-              clientes e {importData.deals.length} oportunidades.
+              clientes e {importData.deals.length} oportunidades.{" "}
+              {importData.distributionRules.length} regras de distribuição e{" "}
+              {importData.scheduledActivities.length} atividades agendadas.
             </p>
             <Button onClick={exportBackup}>
               <ArrowDownToLine size={16} /> Exportar dados atuais antes de

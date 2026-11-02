@@ -12,7 +12,8 @@ import type {
   DealStatus,
   Priority,
 } from "@/lib/types";
-import { OWNERS, PRIORITY_LABELS, SOURCES, STATUS_LABELS } from "@/lib/types";
+import { PRIORITY_LABELS, STATUS_LABELS } from "@/lib/types";
+import { resolveDistribution } from "@/lib/crm-v2";
 import { money } from "@/lib/format";
 import { Button, Field, Modal } from "./ui";
 import { CustomerDialog } from "./customer-dialog";
@@ -26,8 +27,10 @@ export function DealDialog({
   onSave,
   onDelete,
   onSaveCustomer,
+  onSchedule,
 }: {
   data: CrmData;
+  onSchedule: (deal: Deal) => void;
   deal?: Deal;
   pipelineId: string;
   stageId?: string;
@@ -48,8 +51,14 @@ export function DealDialog({
   const [pipelineId, setPipelineId] = useState(
     deal?.pipelineId || initialPipeline,
   );
+  const [businessTypeId, setType] = useState(deal?.businessTypeId || "");
+  const [source, setSource] = useState(deal?.source || "");
+  const [routing, setRouting] = useState("manual");
+  const distribution = resolveDistribution(data, { businessTypeId, source });
   const pipeline =
-    data.pipelines.find((p) => p.id === pipelineId) || data.pipelines[0];
+    (routing === "automatic" ? distribution?.pipeline : null) ||
+    data.pipelines.find((p) => p.id === pipelineId) ||
+    data.pipelines[0];
   const [stageId, setStageId] = useState(
     deal?.stageId || initialStage || pipeline.stages[0].id,
   );
@@ -87,13 +96,17 @@ export function DealDialog({
                   value: Number(f.get("value")),
                   customerId,
                   pipelineId: pipeline.id,
-                  stageId: pipeline.stages.some((s) => s.id === stageId)
-                    ? stageId
-                    : pipeline.stages[0].id,
+                  stageId:
+                    routing === "automatic"
+                      ? pipeline.stages[0].id
+                      : pipeline.stages.some((s) => s.id === stageId)
+                        ? stageId
+                        : pipeline.stages[0].id,
                   status,
                   priority: String(f.get("priority")) as Priority,
                   owner: String(f.get("owner")),
-                  source: String(f.get("source")),
+                  source,
+                  businessTypeId,
                   expectedCloseDate: String(f.get("date")),
                   notes: String(f.get("notes")).trim(),
                 },
@@ -179,9 +192,41 @@ export function DealDialog({
               </div>
             )}
             <div className="form-grid">
+              <Field label="Tipo de negócio">
+                <select
+                  value={businessTypeId}
+                  onChange={(e) => setType(e.target.value)}
+                >
+                  <option value="">Não informado</option>
+                  {data.businessTypes.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Modo de distribuição">
+                <select
+                  value={routing}
+                  onChange={(e) => setRouting(e.target.value)}
+                >
+                  <option value="manual">Escolher funil manualmente</option>
+                  <option value="automatic">Aplicar regras automáticas</option>
+                </select>
+              </Field>
+            </div>
+            {routing === "automatic" && (
+              <div className="notice" role="status">
+                {distribution
+                  ? `Regra ${distribution.rule.name}: ${distribution.pipeline.name} → ${distribution.stage.name}.`
+                  : "Nenhuma regra corresponde. Escolha o funil manualmente ou configure uma regra padrão."}
+              </div>
+            )}
+            <div className="form-grid">
               <Field label="Funil">
                 <select
                   value={pipeline.id}
+                  disabled={routing === "automatic"}
                   onChange={(e) => {
                     setPipelineId(e.target.value);
                     setStageId(
@@ -200,10 +245,13 @@ export function DealDialog({
               <Field label="Etapa">
                 <select
                   value={
-                    pipeline.stages.some((s) => s.id === stageId)
-                      ? stageId
-                      : pipeline.stages[0].id
+                    routing === "automatic"
+                      ? pipeline.stages[0].id
+                      : pipeline.stages.some((s) => s.id === stageId)
+                        ? stageId
+                        : pipeline.stages[0].id
                   }
+                  disabled={routing === "automatic"}
                   onChange={(e) => setStageId(e.target.value)}
                 >
                   {pipeline.stages.map((s) => (
@@ -216,12 +264,17 @@ export function DealDialog({
             </div>
             <div className="form-grid">
               <Field label="Responsável">
-                <select name="owner" defaultValue={deal?.owner || OWNERS[0]}>
-                  {Array.from(
-                    new Set([...OWNERS, ...(deal ? [deal.owner] : [])]),
-                  ).map((o) => (
-                    <option key={o}>{o}</option>
-                  ))}
+                <select
+                  name="owner"
+                  defaultValue={
+                    deal?.owner || data.sellers.find((s) => s.active)?.name
+                  }
+                >
+                  {data.sellers
+                    .filter((s) => s.active || s.name === deal?.owner)
+                    .map((s) => (
+                      <option key={s.id}>{s.name}</option>
+                    ))}
                 </select>
               </Field>
               <Field label="Prioridade">
@@ -251,11 +304,13 @@ export function DealDialog({
                 </select>
               </Field>
               <Field label="Origem">
-                <select name="source" defaultValue={deal?.source || SOURCES[0]}>
-                  {Array.from(
-                    new Set([...SOURCES, ...(deal ? [deal.source] : [])]),
-                  ).map((s) => (
-                    <option key={s}>{s}</option>
+                <select
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                >
+                  <option value="">Não informada</option>
+                  {data.sources.map((s) => (
+                    <option key={s.id}>{s.name}</option>
                   ))}
                 </select>
               </Field>
@@ -269,6 +324,23 @@ export function DealDialog({
                 placeholder="Contexto, próximos passos e o que você precisa lembrar..."
               />
             </Field>
+            {deal && (
+              <section className="activity-section">
+                <h3>Agenda da oportunidade</h3>
+                <Button onClick={() => onSchedule(deal)}>
+                  <Plus size={16} />
+                  Agendar atividade
+                </Button>
+                {data.scheduledActivities
+                  .filter((t) => t.dealId === deal.id)
+                  .map((t) => (
+                    <p key={t.id}>
+                      {t.title} · {new Date(t.dueAt).toLocaleString("pt-BR")} ·{" "}
+                      {t.completedAt ? "Concluída" : "Pendente"}
+                    </p>
+                  ))}
+              </section>
+            )}
             {deal && history.length > 0 && (
               <section className="activity-section">
                 <h3>
@@ -303,7 +375,11 @@ export function DealDialog({
               </Button>
             )}
             <Button onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={saving} variant="primary">
+            <Button
+              type="submit"
+              disabled={saving || (routing === "automatic" && !distribution)}
+              variant="primary"
+            >
               {deal ? "Salvar alterações" : "Criar oportunidade"}
             </Button>
           </div>

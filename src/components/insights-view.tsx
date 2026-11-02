@@ -5,7 +5,8 @@ import {
   Trophy,
   TrendingUp,
 } from "lucide-react";
-import type { CrmData } from "@/lib/types";
+import { results } from "@/lib/crm-v2";
+import type { CrmData, Deal } from "@/lib/types";
 import { money } from "@/lib/format";
 
 export function InsightsView({ data }: { data: CrmData }) {
@@ -22,7 +23,7 @@ export function InsightsView({ data }: { data: CrmData }) {
         </div>
         <span className="period-pill">Todos os períodos</span>
       </div>
-      <div className="insight-stats">
+      <div className="insight-stats v2-stats">
         <div className="insight-stat">
           <CircleDollarSign />
           <span>Em oportunidades</span>
@@ -43,6 +44,17 @@ export function InsightsView({ data }: { data: CrmData }) {
             %
           </strong>
           <small>Ganhos ÷ negócios encerrados</small>
+        </div>
+        <div className="insight-stat">
+          <Target />
+          <span>Negócios perdidos</span>
+          <strong>
+            {data.deals.filter((d) => d.status === "lost").length}
+          </strong>
+          <small>
+            Valor total da base:{" "}
+            {money(data.deals.reduce((sum, d) => sum + d.value, 0))}
+          </small>
         </div>
       </div>
       <div className="insights-panel">
@@ -76,6 +88,52 @@ export function InsightsView({ data }: { data: CrmData }) {
           );
         })}
       </div>
+      <ResultsTable
+        title="Conversão por funil"
+        groups={data.pipelines.map((p) => ({
+          id: p.id,
+          name: p.name,
+          deals: data.deals.filter((d) => d.pipelineId === p.id),
+        }))}
+      />
+      <ResultsTable
+        title="Resultados por origem"
+        groups={[
+          ...data.sources.map((s) => ({
+            id: s.id,
+            name: s.name,
+            deals: data.deals.filter((d) => d.source === s.name),
+          })),
+          {
+            id: "without-source",
+            name: "Sem origem",
+            deals: data.deals.filter((d) => !d.source),
+          },
+        ]}
+      />
+      <ResultsTable
+        title="Resultados por tipo de negócio"
+        groups={[
+          ...data.businessTypes.map((b) => ({
+            id: b.id,
+            name: b.name,
+            deals: data.deals.filter((d) => d.businessTypeId === b.id),
+          })),
+          {
+            id: "without-type",
+            name: "Sem classificação",
+            deals: data.deals.filter((d) => !d.businessTypeId),
+          },
+        ]}
+      />
+      <ResultsTable
+        title="Resultados por responsável"
+        groups={data.sellers.map((s) => ({
+          id: s.id,
+          name: `${s.name}${s.active ? "" : " (inativo)"}`,
+          deals: data.deals.filter((d) => d.owner === s.name),
+        }))}
+      />
       <div className="insight-note">
         <ArrowUpRight size={20} />
         <div>
@@ -87,5 +145,58 @@ export function InsightsView({ data }: { data: CrmData }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ResultsTable({
+  title,
+  groups,
+}: {
+  title: string;
+  groups: { id: string; name: string; deals: Deal[] }[];
+}) {
+  return (
+    <section className="insights-panel">
+      <div className="panel-heading">
+        <h2>{title}</h2>
+      </div>
+      <div className="results-scroll">
+        <table className="results-table">
+          <caption className="sr-only">
+            {title}. Conversão: ganhos divididos pelos negócios encerrados.
+          </caption>
+          <thead>
+            <tr>
+              <th>Grupo</th>
+              <th>Abertas</th>
+              <th>Ganhos</th>
+              <th>Perdidos</th>
+              <th>Valor total</th>
+              <th>Valor ganho</th>
+              <th>Conversão</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => {
+              const r = results(g.deals);
+              return (
+                <tr key={g.id}>
+                  <th scope="row">{g.name}</th>
+                  <td>{r.open}</td>
+                  <td>{r.won}</td>
+                  <td>{r.lost}</td>
+                  <td>{money(r.total)}</td>
+                  <td>{money(r.wonValue)}</td>
+                  <td>{r.conversion}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted">
+        Conversão = ganhos ÷ (ganhos + perdidos). Todos os períodos.
+      </p>
+    </section>
   );
 }

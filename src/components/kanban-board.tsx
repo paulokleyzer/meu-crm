@@ -35,6 +35,7 @@ import {
 import type { CrmData, Deal, Pipeline, Stage } from "@/lib/types";
 import { PRIORITY_LABELS } from "@/lib/types";
 import { initials, localDate, money, shortDate } from "@/lib/format";
+import { activityStatus } from "@/lib/crm-v2";
 
 function CardContents({ deal, data }: { deal: Deal; data: CrmData }) {
   const customer = data.customers.find((c) => c.id === deal.customerId);
@@ -52,6 +53,9 @@ function CardContents({ deal, data }: { deal: Deal; data: CrmData }) {
         <GripVertical className="card-grip" size={16} aria-hidden="true" />
       </span>
       <span className="card-title">{deal.title}</span>
+      {data.scheduledActivities.some(
+        (t) => t.dealId === deal.id && activityStatus(t) === "overdue",
+      ) && <span className="activity-badge overdue">Atividade atrasada</span>}
       <span className="card-company">
         <Building2 size={13} aria-hidden="true" />
         {customer?.company || customer?.name}
@@ -214,12 +218,13 @@ const detectCollision: CollisionDetection = (args) => {
     // a keyboard collision from a specific card in the neighbouring column.
     const targets = args.droppableContainers.filter(
       (c) =>
-        c.data.current?.type === "deal" ||
-        !args.droppableContainers.some(
-          (other) =>
-            other.data.current?.type === "deal" &&
-            other.data.current.stageId === c.id,
-        ),
+        c.data.current?.type !== "pipeline" &&
+        (c.data.current?.type === "deal" ||
+          !args.droppableContainers.some(
+            (other) =>
+              other.data.current?.type === "deal" &&
+              other.data.current.stageId === c.id,
+          )),
     );
     return closestCorners({ ...args, droppableContainers: targets });
   }
@@ -317,8 +322,10 @@ export function KanbanBoard({
     setOverStage(null);
     if (!over || over.id === active.id) return;
     const targetDeal = data.deals.find((d) => d.id === over.id);
-    const stageId = targetDeal?.stageId || String(over.id);
-    if (!pipeline.stages.some((s) => s.id === stageId)) return;
+    const stageId =
+      targetDeal?.stageId || String(over.data.current?.stageId || over.id);
+    if (!data.pipelines.some((p) => p.stages.some((s) => s.id === stageId)))
+      return;
     let beforeId = targetDeal?.id;
     const moving = data.deals.find((d) => d.id === active.id);
     if (
@@ -370,6 +377,19 @@ export function KanbanBoard({
       }}
       onDragEnd={dragEnd}
     >
+      {activeId && data.pipelines.length > 1 && (
+        <div
+          className="pipeline-drop-targets"
+          aria-label="Arraste para outro funil"
+        >
+          <span>Mover para outro funil:</span>
+          {data.pipelines
+            .filter((p) => p.id !== pipeline.id)
+            .map((p) => (
+              <PipelineDropTarget key={p.id} pipeline={p} />
+            ))}
+        </div>
+      )}
       <div
         className="board-scroll"
         tabIndex={0}
@@ -407,5 +427,21 @@ export function KanbanBoard({
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+function PipelineDropTarget({ pipeline }: { pipeline: Pipeline }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `pipeline-drop-${pipeline.id}`,
+    data: { type: "pipeline", stageId: pipeline.stages[0].id },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`pipeline-drop-target ${isOver ? "drop-target" : ""}`}
+      data-testid={`pipeline-drop-${pipeline.id}`}
+    >
+      {pipeline.name} → {pipeline.stages[0].name}
+    </div>
   );
 }

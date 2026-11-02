@@ -290,7 +290,7 @@ describe("persistência e backups", () => {
   });
   it("rejeita versão incompatível, valores inválidos e referências órfãs", () => {
     const d = createSeedData();
-    expect(() => parseCrmData({ ...d, schemaVersion: 2 })).toThrow();
+    expect(() => parseCrmData({ ...d, schemaVersion: 999 })).toThrow();
     expect(() =>
       parseCrmData({ ...d, deals: [{ ...d.deals[0], value: -1 }] }),
     ).toThrow();

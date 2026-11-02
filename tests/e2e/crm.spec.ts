@@ -418,6 +418,7 @@ test("layout móvel preserva navegação e cadastro sem transbordar a página", 
 });
 
 test("acessibilidade básica do quadro e do formulário", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   const board = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa"])
     .analyze();

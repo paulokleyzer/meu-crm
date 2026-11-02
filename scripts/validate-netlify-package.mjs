@@ -58,7 +58,11 @@ const result = spawnSync(
 );
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
-for (const name of ["001_crm", "002_snapshot"]) {
+const migrations = (await readdir(join(root, "netlify/database/migrations")))
+  .filter((name) => /^\d+_.+\.sql$/.test(name))
+  .sort()
+  .map((name) => name.slice(0, -4));
+for (const name of migrations) {
   const source = await readFile(
     join(root, "netlify/database/migrations", name + ".sql"),
   );
@@ -120,7 +124,7 @@ await writeFile(
     {
       fixture,
       adapter: "5.16.5",
-      migrations: 2,
+      migrations: migrations.length,
       browserSecretsFound: false,
       protectionProxyPackaged: true,
       packagedFunctionPersistenceValidated: true,

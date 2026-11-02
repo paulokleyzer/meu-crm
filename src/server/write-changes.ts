@@ -6,10 +6,17 @@ const definitions = {
   crm_pipelines: "id text, name text, description text, position integer",
   crm_stages:
     "id text, pipeline_id text, name text, probability integer, position integer",
+  crm_business_types: "id text, name text, position integer",
+  crm_sources: "id text, name text, position integer",
+  crm_sellers: "id text, name text, active boolean, position integer",
+  crm_distribution_rules:
+    "id text, name text, business_type_id text, source text, pipeline_id text, enabled boolean, is_default boolean, position integer",
+  crm_scheduled_activities:
+    "id text, title text, type text, due_at timestamptz, customer_id text, deal_id text, owner text, completed_at timestamptz, notes text, remind_before_minutes integer, created_at timestamptz",
   crm_customers:
     "id text, name text, company text, email text, phone text, created_at timestamptz",
   crm_deals:
-    "id text, title text, value numeric(14,2), customer_id text, pipeline_id text, stage_id text, status text, priority text, owner text, source text, expected_close_date date, notes text, position integer, created_at timestamptz, updated_at timestamptz",
+    "id text, title text, value numeric(14,2), customer_id text, pipeline_id text, stage_id text, status text, priority text, owner text, source text, business_type_id text, expected_close_date date, notes text, position integer, created_at timestamptz, updated_at timestamptz",
   crm_activities:
     "id text, deal_id text, text text, created_at timestamptz, position integer",
 } as const;
@@ -31,6 +38,35 @@ function rows(data: CrmData): Record<Table, Row[]> {
         position,
       })),
     ),
+    crm_business_types: data.businessTypes.map((c, position) => ({
+      ...c,
+      position,
+    })),
+    crm_sources: data.sources.map((c, position) => ({ ...c, position })),
+    crm_sellers: data.sellers.map((c, position) => ({ ...c, position })),
+    crm_distribution_rules: data.distributionRules.map((r, position) => ({
+      id: r.id,
+      name: r.name,
+      business_type_id: r.businessTypeId || null,
+      source: r.source,
+      pipeline_id: r.pipelineId,
+      enabled: r.enabled,
+      is_default: r.isDefault,
+      position,
+    })),
+    crm_scheduled_activities: data.scheduledActivities.map((t) => ({
+      id: t.id,
+      title: t.title,
+      type: t.type,
+      due_at: t.dueAt,
+      customer_id: t.customerId || null,
+      deal_id: t.dealId || null,
+      owner: t.owner,
+      completed_at: t.completedAt || null,
+      notes: t.notes,
+      remind_before_minutes: t.remindBeforeMinutes,
+      created_at: t.createdAt,
+    })),
     crm_customers: data.customers.map((c) => ({
       id: c.id,
       name: c.name,
@@ -50,6 +86,7 @@ function rows(data: CrmData): Record<Table, Row[]> {
       priority: d.priority,
       owner: d.owner,
       source: d.source,
+      business_type_id: d.businessTypeId || null,
       expected_close_date: d.expectedCloseDate || null,
       notes: d.notes,
       position: d.position,
@@ -93,11 +130,16 @@ export async function writeChanges(
     );
   }
   for (const table of [
+    "crm_scheduled_activities",
+    "crm_distribution_rules",
     "crm_activities",
     "crm_deals",
     "crm_stages",
     "crm_pipelines",
     "crm_customers",
+    "crm_business_types",
+    "crm_sources",
+    "crm_sellers",
   ] as Table[]) {
     const retained = new Set(next[table].map((row) => row.id));
     const removed = old[table]
