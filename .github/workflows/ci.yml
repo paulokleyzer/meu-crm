@@ -2,7 +2,7 @@ name: Validar CRM
 
 on:
   push:
-    branches: [main, feat/crm-v1]
+    branches: [main, feat/crm-v1, feat/crm-postgres]
   pull_request:
     branches: [main]
 
@@ -13,6 +13,22 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: meu_crm_test
+          POSTGRES_USER: crm_test
+          POSTGRES_PASSWORD: ci-fictional-database-only
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U crm_test -d meu_crm_test" --health-interval 3s --health-timeout 3s --health-retries 15
+    env:
+      DATABASE_URL: postgresql://crm_test:ci-fictional-database-only@127.0.0.1:5432/meu_crm_test
+      TEST_DATABASE_URL: postgresql://crm_test:ci-fictional-database-only@127.0.0.1:5432/meu_crm_test
+      CRM_BASIC_USER: ci-crm-test
+      CRM_BASIC_PASSWORD: ci-fictional-access-only
+      CRM_ALLOWED_ORIGIN: http://127.0.0.1:3000
+      CRM_E2E_ALLOW_RESET: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,7 +36,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run db:migrate
       - run: npm run check
+      - run: npm run test:db
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4

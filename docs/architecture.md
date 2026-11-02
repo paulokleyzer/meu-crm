@@ -1,56 +1,41 @@
-# Arquitetura da primeira versão
+# Arquitetura do CRM com PostgreSQL
 
-## Escopo atual
+A branch `feat/crm-postgres` mantém os componentes da primeira versão e substitui a persistência ativa por uma API Next.js com PostgreSQL. O esquema do backup continua `schemaVersion: 1`; os IDs de texto da versão anterior são aceitos. A versão estática publicada no Netlify e o ZIP anterior não são modificados.
 
-Aplicação Next.js App Router com uma tela cliente hidratada a partir do `localStorage`. O HTML inicial tem um estado de carregamento; a leitura dos dados ocorre no navegador. O primeiro acesso recebe dois funis e dados fictícios. Não há backend, login ou chamadas a serviços de terceiros.
+## Fluxo de dados
 
-O fluxo é `componentes → operações de domínio → validação Zod → repositório local → store React`. `useSyncExternalStore` publica snapshots consistentes e ouve alterações em outras abas. Falhas de persistência têm aviso explícito; a interface continua funcionando durante a sessão. Dados inválidos já armazenados são preservados.
+`componentes → domínio imutável → store assíncrona → HTTP → validação no servidor → transação PostgreSQL`.
 
-## Modelo e invariantes
+- `src/lib/crm.ts`: regras existentes de criação, edição, transferência e exclusão, independentes do React e do banco.
+- `src/hooks/use-crm.ts`: snapshot confirmado, visualização otimista, fila de gravações do dispositivo, polling, tratamento de erros e invalidação de formulários desatualizados.
+- `src/lib/http-repository.ts`: cliente same-origin, sem cache; repete uma falha de rede incerta usando o mesmo ID de requisição.
+- `src/app/api/crm`: leitura e substituição validada do conjunto; importação é explícita e auditada.
+- `src/server`: proteção, pool PostgreSQL, transações e migrações.
 
-- `Pipeline`: nome, descrição e lista ordenada de etapas.
-- `Stage`: identificador estável, nome e probabilidade de 0 a 100.
-- `Customer`: contato, empresa, e-mail e telefone.
-- `Deal`: cliente e etapa vinculados, valor em BRL, ordem na etapa, status, responsável, origem, prioridade, previsão, notas e datas.
-- `Activity`: registro de criação, edição e transferência de uma oportunidade.
+A UI não escreve no `localStorage` nem usa dados fictícios de fallback quando a API falha. O adaptador local em `src/lib/repository.ts` foi mantido como código de compatibilidade da versão anterior e para seus testes de formato; ele não participa da store atual.
 
-Identificadores novos usam UUID; os dados demonstrativos usam identificadores estáveis para tornar os testes determinísticos. O schema impede identificadores duplicados, referências órfãs, funis sem etapas, valores negativos e backups de versões incompatíveis. A mesma validação é usada na importação e na gravação.
+## Modelo relacional
 
-Operações imutáveis em `src/lib/crm.ts` são independentes do React. Excluir etapa ou funil transfere oportunidades antes de remover a estrutura. A exclusão de negócio remove seu histórico e mantém o contato. Reordenações não criam atividades falsas de transferência.
+`crm_pipelines`, `crm_stages`, `crm_customers`, `crm_deals` e `crm_activities` armazenam as entidades separadamente. Etapas e oportunidades usam chaves estrangeiras; a referência composta garante que a etapa pertence ao funil. Valores usam `numeric(14,2)`, datas usam `date`/`timestamptz`, e posições mantêm a ordem do quadro.
 
-A ordenação dos funis é a ordem da lista; a ordenação das etapas fica na lista de cada funil; a dos cartões usa `position`. A lista e o quadro usam os mesmos negócios filtrados. Receita ponderada = soma de valor × probabilidade da etapa para abertos, 100% para ganhos e 0% para perdidos.
+`crm_state` possui a revisão única do conjunto. `crm_history` é append-only pela aplicação e registra revisão, UUID da requisição, hash do conteúdo, operação e snapshots anterior/posterior. Importar um backup não apaga o histórico de transações. As atividades visíveis de cada negócio continuam no painel de detalhes, sem mudança de navegação.
 
-## Arrastar e soltar
+Uma gravação bloqueia a linha de revisão, verifica a versão, substitui as entidades na ordem exigida pelas chaves estrangeiras e grava histórico + revisão na mesma transação. Leitores usam transação read-only com snapshot repeatable-read: recebem um conjunto inteiro, nunca uma atualização parcial. Qualquer erro SQL causa rollback de tudo. A validação Zod rejeita referências órfãs, IDs duplicados, funis sem etapas, valores inválidos e backups incompatíveis antes da escrita.
 
-Cada coluna é um `useDroppable` independente, mesmo quando não contém cartões. Cada cartão usa `useSortable`, com `SortableContext` por etapa e `DragOverlay` para a representação durante o movimento. Mouse, toque com atraso e teclado têm sensores próprios. O movimento é confirmado no `onDragEnd`; cancelar ou soltar fora do quadro mantém os dados anteriores.
+## Concorrência e sincronização
 
-O editor de funis usa outro contexto para reordenar etapas e também oferece botões de subir/descer. Nenhuma configuração depende exclusivamente de arrastar com o mouse. Todos os detalhes dos negócios podem ser editados por formulário.
+Dois clientes que gravam a mesma revisão não podem ter ambos sucesso: o segundo recebe 409. Repetir uma requisição já confirmada com o mesmo ID/conteúdo não gera outra gravação. Campos de formulários não são reaplicados automaticamente após conflito. Mudanças remotas invalidam o token de edição de formulários e movimentos em andamento, exigindo revisão/reabertura.
 
-## Caminho para PostgreSQL
+O protocolo atual usa snapshots completos e revisão global, adequado a esta primeira versão centralizada. Não há mesclagem automática, colaboração por campo, paginação da base ou fila offline. A evolução para bases maiores é endpoints de comandos com revisão por entidade e escrita incremental; o domínio e os IDs estáveis já estão separados para essa evolução.
 
-1. Adicionar autenticação, autorização por workspace e uma API no servidor antes de usar dados reais.
-2. Mapear entidades para tabelas `workspaces`, `pipelines`, `stages`, `customers`, `deals`, `activities`. Usar chaves estrangeiras e índices por workspace, funil, etapa e posição. Valores financeiros devem usar `numeric(14,2)` ou centavos inteiros no banco.
-3. Mover as operações do domínio para uma camada de serviços da API, com transações para transferências/exclusões/reordenações e validação no servidor. A validação no navegador não é uma fronteira de segurança.
-4. Substituir o adaptador local por um adaptador HTTP. O contrato atual é síncrono por ser local; a store deverá tratar carregamento e erros assíncronos, concorrência e cancelamento ao adotar a API. Os componentes e as operações puras podem ser reaproveitados.
-5. Adicionar revisão otimista/controle de versão por registro e resolução de conflitos entre usuários. A sincronização local atual segue a última gravação e não oferece colaboração multiusuário.
-6. Oferecer importação transacional dos backups v1; não conectar o banco diretamente ao navegador nem colocar credenciais em variáveis `NEXT_PUBLIC_*`.
+## Acesso e implantação
 
-Nenhum banco ou endpoint fictício foi criado nesta etapa. A ausência de infraestrutura externa permite testar o CRM imediatamente.
+HTTP Basic protege a aplicação e a API, sem tela de login ou níveis de acesso no CRM. Credenciais/origem ausentes falham fechado. Gravações exigem origem exata e JSON, com tamanho limitado. Para acesso externo, o servidor exige uma origem HTTPS; a implantação usa proxy reverso TLS, aplicativo em loopback e banco na rede privada. Credenciais nunca são enviadas no bundle cliente nem colocadas em `NEXT_PUBLIC_*`.
 
-## WhatsApp Business e atendimento por IA
+A proteção é de um espaço compartilhado. Ela não identifica autores individuais e não equivale a autenticação multiusuário. Essa será outra etapa antes de introduzir permissões ou auditoria por pessoa.
 
-Esses módulos devem entrar como serviços no servidor, separados do quadro:
+O [guia operacional](postgres.md) contém configuração local, Docker/VPS, migrações, importação v1, backups e testes. Não há dependência de Supabase. Migrações são versionadas e conferidas por checksum, sem instalação automática ou seed em cada inicialização.
 
-- Adaptador oficial da WhatsApp Business Platform, com credenciais somente no servidor, validação de assinatura de webhooks, IDs externos únicos e processamento idempotente.
-- Entidades próprias para conversas e mensagens ligadas a clientes e oportunidades; mensagens não devem ser gravadas nas notas do negócio como substituto de um modelo de conversa.
-- Fila de processamento e auditoria para direcionamento por origem/tipo de negócio, notificações e automações. Eventos como criação, alteração de etapa e recebimento de mensagem podem alimentar essas regras.
-- Estado de atendimento por conversa: `automático`, `humano`, `pausado`. Uma resposta manual deve pausar a IA atomicamente; o trabalhador de IA deve revalidar esse estado imediatamente antes de enviar qualquer mensagem.
-- Consentimento, permissões, retenção de mensagens e regras de templates devem fazer parte da implementação oficial futura.
+## WhatsApp Business e IA
 
-Não há credenciais, telas de login, mensagens simuladas ou ações de WhatsApp nesta primeira versão.
-
-## Limitações conhecidas
-
-Persistência por navegador/origem, sem controle de acesso ou colaboração remota. O `localStorage` tem limite de espaço e gravação síncrona; é adequado para esta demonstração, não para bases grandes. O schema de backup é versionado (`schemaVersion: 1`) para permitir migrações futuras. Exportação/importação usa JSON e não executa conteúdo fornecido pelo arquivo.
-
-O layout responsivo suporta o navegador móvel, sem prometer aplicativo nativo ou recursos offline de PWA. A base React e o domínio separado permitem reaproveitar regras em uma futura experiência móvel.
+Permanecem fora desta etapa. Devem entrar como serviços do servidor, com credenciais protegidas, validação de webhooks, idempotência, fila e modelos próprios de conversas/mensagens. A resposta manual de um atendente deverá pausar a IA atomicamente por conversa, e o trabalhador de IA deverá revalidar esse estado antes de enviar. Esses serviços podem reutilizar clientes, oportunidades e IDs existentes sem alterar a estrutura visual dos funis.

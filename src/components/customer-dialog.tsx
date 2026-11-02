@@ -1,5 +1,8 @@
 "use client";
 
+import { getEditToken } from "@/hooks/use-crm";
+
+import { useState } from "react";
 import type { Customer, CustomerInput } from "@/lib/types";
 import { Button, Field, Modal } from "./ui";
 
@@ -10,8 +13,14 @@ export function CustomerDialog({
 }: {
   customer?: Customer;
   onClose: () => void;
-  onSave: (input: CustomerInput, id?: string) => void;
+  onSave: (
+    input: CustomerInput,
+    id?: string,
+    editToken?: number,
+  ) => Promise<unknown>;
 }) {
+  const [editToken] = useState(getEditToken);
+  const [saving, setSaving] = useState(false);
   return (
     <Modal
       open
@@ -20,18 +29,24 @@ export function CustomerDialog({
       description="Pessoas e empresas por trás de grandes oportunidades."
     >
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           const f = new FormData(e.currentTarget);
-          onSave(
-            {
-              name: String(f.get("name")).trim(),
-              company: String(f.get("company")).trim(),
-              email: String(f.get("email")).trim(),
-              phone: String(f.get("phone")).trim(),
-            },
-            customer?.id,
-          );
+          setSaving(true);
+          try {
+            await onSave(
+              {
+                name: String(f.get("name")).trim(),
+                company: String(f.get("company")).trim(),
+                email: String(f.get("email")).trim(),
+                phone: String(f.get("phone")).trim(),
+              },
+              customer?.id,
+              editToken,
+            );
+          } finally {
+            setSaving(false);
+          }
         }}
       >
         <div className="dialog-body form-stack">
@@ -79,7 +94,7 @@ export function CustomerDialog({
         </div>
         <div className="dialog-footer">
           <Button onClick={onClose}>Cancelar</Button>
-          <Button type="submit" variant="primary">
+          <Button type="submit" disabled={saving} variant="primary">
             {customer ? "Salvar cliente" : "Cadastrar cliente"}
           </Button>
         </div>

@@ -1,9 +1,28 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { createSeedData } from "../../src/lib/seed";
 
 const KEY = "meu-crm:data:v1";
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, request, baseURL }) => {
+  if (
+    process.env.CRM_E2E_ALLOW_RESET !== "true" ||
+    !["localhost", "127.0.0.1"].includes(new URL(baseURL!).hostname)
+  )
+    throw new Error(
+      "E2E exige CRM_E2E_ALLOW_RESET=true em servidor local com dados fictícios.",
+    );
+  const state = await (await request.get("/api/crm")).json();
+  const response = await request.put("/api/crm", {
+    headers: { origin: new URL(baseURL!).origin },
+    data: {
+      data: createSeedData(),
+      baseRevision: state.revision,
+      requestId: crypto.randomUUID(),
+      operation: "import",
+    },
+  });
+  expect(response.ok()).toBe(true);
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "Oportunidades" }),
@@ -43,6 +62,9 @@ test("move cartões entre etapas com o mouse e persiste após recarregar", async
   const column = page.getByTestId("stage-stage-qualified");
   await drag(page, source, page.getByTestId("dropzone-stage-qualified"), true);
   await expect(column.getByTestId("deal-deal-0")).toBeVisible();
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(column.getByTestId("deal-deal-0")).toBeVisible();
   await column.getByTestId("deal-deal-0").click();
@@ -64,6 +86,9 @@ test("aceita arrastar para uma coluna completamente vazia", async ({
     page.getByTestId("dropzone-partner-meeting"),
   );
   await expect(empty.getByTestId("deal-deal-partner")).toBeVisible();
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Selecionar funil:" }).click();
   await page.getByRole("menuitem", { name: "Parcerias", exact: true }).click();
@@ -151,6 +176,9 @@ test("cadastra cliente dentro de uma oportunidade e edita seus detalhes", async 
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Clientes", exact: true }).click();
   await page.getByLabel("Buscar clientes").fill("Carolina");
@@ -210,11 +238,14 @@ test("cria, edita, reordena, duplica e exclui um funil", async ({ page }) => {
     .getByRole("button", { name: "Excluir funil", exact: true })
     .click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
   await page.reload();
-  const stored = await page.evaluate(
-    (key) => JSON.parse(localStorage.getItem(key)!),
-    KEY,
-  );
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
+  const stored = (await (await page.request.get("/api/crm")).json()).data;
   expect(stored.pipelines.map((p: { name: string }) => p.name)).toContain(
     "Sucesso do cliente",
   );
@@ -249,10 +280,10 @@ test("excluir etapas e funis transfere oportunidades sem perda", async ({
   await expect(
     page.getByRole("button", { name: "Selecionar funil: Parcerias" }),
   ).toBeVisible();
-  const stored = await page.evaluate(
-    (key) => JSON.parse(localStorage.getItem(key)!),
-    KEY,
-  );
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
+  const stored = (await (await page.request.get("/api/crm")).json()).data;
   expect(stored.deals).toHaveLength(12);
   expect(stored.pipelines).toHaveLength(1);
   await page.getByRole("button", { name: "Ações do funil" }).click();
@@ -299,6 +330,9 @@ test("exclui uma oportunidade somente após confirmação", async ({ page }) => 
     .getByRole("button", { name: "Excluir oportunidade", exact: true })
     .click();
   await expect(page.getByTestId("deal-deal-0")).toHaveCount(0);
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(page.locator(".deal-card")).toHaveCount(9);
 });
@@ -326,20 +360,21 @@ test("exporta e restaura backup validado", async ({ page }) => {
   await expect(page.locator(".deal-card")).toHaveCount(10);
 });
 
-test("preserva armazenamento corrompido e avisa sobre modo de sessão", async ({
+test("usa PostgreSQL mesmo quando o armazenamento local contém dados antigos inválidos", async ({
   page,
 }) => {
   await page.evaluate((key) => localStorage.setItem(key, "invalid-json"), KEY);
-  await page.reload();
   await expect(
-    page
-      .getByRole("alert")
-      .filter({ hasText: "Os dados anteriores foram preservados" }),
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
   ).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".deal-card")).toHaveCount(10);
   expect(await page.evaluate((key) => localStorage.getItem(key), KEY)).toBe(
     "invalid-json",
   );
-  await expect(page.locator(".deal-card")).toHaveCount(10);
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
 });
 
 test("navega entre clientes e indicadores", async ({ page }) => {
@@ -423,6 +458,9 @@ test("reorganiza etapas arrastando no editor de funil", async ({ page }) => {
   await expect(page.locator(".column-title h2").first()).toHaveText(
     "Qualificação",
   );
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(page.locator(".column-title h2").nth(2)).toHaveText("Novo lead");
 });
@@ -470,10 +508,10 @@ test("arrasta uma oportunidade por toque no celular", async ({ browser }) => {
   await expect(
     page.getByTestId("stage-partner-meeting").getByTestId("deal-deal-partner"),
   ).toBeVisible();
-  const stored = await page.evaluate(
-    (key) => JSON.parse(localStorage.getItem(key)!),
-    KEY,
-  );
+  await expect(
+    page.getByText("Salvo no PostgreSQL", { exact: true }),
+  ).toBeVisible();
+  const stored = (await (await page.request.get("/api/crm")).json()).data;
   expect(
     stored.deals.find((d: { id: string }) => d.id === "deal-partner").stageId,
   ).toBe("partner-meeting");

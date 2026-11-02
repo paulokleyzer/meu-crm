@@ -1,5 +1,7 @@
 "use client";
 
+import { getEditToken } from "@/hooks/use-crm";
+
 import { useState } from "react";
 import { Building2, Clock3, Plus, Trash2, UserRound } from "lucide-react";
 import type {
@@ -30,10 +32,19 @@ export function DealDialog({
   pipelineId: string;
   stageId?: string;
   onClose: () => void;
-  onSave: (input: DealInput, id?: string) => void;
+  onSave: (
+    input: DealInput,
+    id?: string,
+    editToken?: number,
+  ) => Promise<unknown>;
   onDelete: (deal: Deal) => void;
-  onSaveCustomer: (input: CustomerInput) => string | undefined;
+  onSaveCustomer: (
+    input: CustomerInput,
+    editToken?: number,
+  ) => Promise<string | undefined>;
 }) {
+  const [editToken] = useState(getEditToken);
+  const [saving, setSaving] = useState(false);
   const [pipelineId, setPipelineId] = useState(
     deal?.pipelineId || initialPipeline,
   );
@@ -65,27 +76,33 @@ export function DealDialog({
         wide
       >
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
-            onSave(
-              {
-                title: String(f.get("title")).trim(),
-                value: Number(f.get("value")),
-                customerId,
-                pipelineId: pipeline.id,
-                stageId: pipeline.stages.some((s) => s.id === stageId)
-                  ? stageId
-                  : pipeline.stages[0].id,
-                status,
-                priority: String(f.get("priority")) as Priority,
-                owner: String(f.get("owner")),
-                source: String(f.get("source")),
-                expectedCloseDate: String(f.get("date")),
-                notes: String(f.get("notes")).trim(),
-              },
-              deal?.id,
-            );
+            setSaving(true);
+            try {
+              await onSave(
+                {
+                  title: String(f.get("title")).trim(),
+                  value: Number(f.get("value")),
+                  customerId,
+                  pipelineId: pipeline.id,
+                  stageId: pipeline.stages.some((s) => s.id === stageId)
+                    ? stageId
+                    : pipeline.stages[0].id,
+                  status,
+                  priority: String(f.get("priority")) as Priority,
+                  owner: String(f.get("owner")),
+                  source: String(f.get("source")),
+                  expectedCloseDate: String(f.get("date")),
+                  notes: String(f.get("notes")).trim(),
+                },
+                deal?.id,
+                editToken,
+              );
+            } finally {
+              setSaving(false);
+            }
           }}
         >
           <div className="dialog-body form-stack">
@@ -286,7 +303,7 @@ export function DealDialog({
               </Button>
             )}
             <Button onClick={onClose}>Cancelar</Button>
-            <Button type="submit" variant="primary">
+            <Button type="submit" disabled={saving} variant="primary">
               {deal ? "Salvar alterações" : "Criar oportunidade"}
             </Button>
           </div>
@@ -295,8 +312,8 @@ export function DealDialog({
       {creatingCustomer && (
         <CustomerDialog
           onClose={() => setCreatingCustomer(false)}
-          onSave={(input) => {
-            const id = onSaveCustomer(input);
+          onSave={async (input, _id, token) => {
+            const id = await onSaveCustomer(input, token);
             if (id) {
               setCustomerId(id);
               setCreatingCustomer(false);

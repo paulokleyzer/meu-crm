@@ -1,5 +1,7 @@
 "use client";
 
+import { getEditToken } from "@/hooks/use-crm";
+
 import { useState } from "react";
 import {
   DndContext,
@@ -131,8 +133,14 @@ export function PipelineEditor({
   pipeline?: Pipeline;
   data: CrmData;
   onClose: () => void;
-  onSave: (input: PipelineInput, id?: string) => void;
+  onSave: (
+    input: PipelineInput,
+    id?: string,
+    editToken?: number,
+  ) => Promise<unknown>;
 }) {
+  const [editToken] = useState(getEditToken);
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState(pipeline?.name || "");
   const [description, setDescription] = useState(pipeline?.description || "");
   const [stages, setStages] = useState<Stage[]>(
@@ -173,16 +181,22 @@ export function PipelineEditor({
       wide
     >
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          onSave(
-            {
-              name: name.trim(),
-              description: description.trim(),
-              stages: stages.map((s) => ({ ...s, name: s.name.trim() })),
-            },
-            pipeline?.id,
-          );
+          setSaving(true);
+          try {
+            await onSave(
+              {
+                name: name.trim(),
+                description: description.trim(),
+                stages: stages.map((s) => ({ ...s, name: s.name.trim() })),
+              },
+              pipeline?.id,
+              editToken,
+            );
+          } finally {
+            setSaving(false);
+          }
         }}
       >
         <div className="dialog-body">
@@ -263,7 +277,7 @@ export function PipelineEditor({
         </div>
         <div className="dialog-footer">
           <Button onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" type="submit">
+          <Button variant="primary" type="submit" disabled={saving}>
             {pipeline ? "Salvar alterações" : "Criar funil"}
           </Button>
         </div>

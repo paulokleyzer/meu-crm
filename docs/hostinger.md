@@ -1,5 +1,7 @@
 # Colocar a versão de testes no ar na Hostinger
 
+> Este guia e o ZIP referem-se à versão estática anterior (`feat/crm-v1`). Para a nova versão com banco centralizado, siga [PostgreSQL e Hostinger VPS](postgres.md). O ZIP antigo permanece sem alterações e não inclui a API PostgreSQL.
+
 A versão atual do CRM funciona no navegador, usando React e `localStorage`. Pode ser publicada como arquivos estáticos em uma hospedagem que sirva HTML, CSS e JavaScript, sem servidor Node.js, PostgreSQL ou chave de API. Os funis, o cadastro de clientes e o arrastar e soltar continuam funcionando.
 
 ## Preparar os arquivos

@@ -1,0 +1,74 @@
+import { z } from "zod";
+import { crmSchema } from "@/lib/schema";
+import { apiHeaders, protectedApi } from "@/server/http";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+const writeSchema = z.object({
+  data: crmSchema,
+  baseRevision: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(Number.MAX_SAFE_INTEGER - 1),
+  requestId: z.uuid(),
+  operation: z.enum(["change", "import"]),
+});
+
+export function GET(request: Request) {
+  return protectedApi(request, async (repository) => {
+    const result = await repository.load();
+    return Response.json(result, {
+      headers: { ...apiHeaders, ETag: `"revision-${result.revision}"` },
+    });
+  });
+}
+export function PUT(request: Request) {
+  return protectedApi(request, async (repository) => {
+    const maxBytes = 10 * 1024 * 1024;
+    if (Number(request.headers.get("content-length")) > maxBytes)
+      return Response.json(
+        { error: "O backup deve ter até 10 MB." },
+        { status: 413, headers: apiHeaders },
+      );
+    let input: unknown;
+    try {
+      const reader = request.body?.getReader();
+      if (!reader) throw new Error();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > maxBytes) {
+          await reader.cancel();
+          return Response.json(
+            { error: "O backup deve ter até 10 MB." },
+            { status: 413, headers: apiHeaders },
+          );
+        }
+        chunks.push(value);
+      }
+      input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    } catch {
+      return Response.json(
+        { error: "JSON inválido." },
+        { status: 400, headers: apiHeaders },
+      );
+    }
+    const parsed = writeSchema.safeParse(input);
+    if (!parsed.success)
+      return Response.json(
+        {
+          error:
+            "Dados inválidos. Verifique os campos e referências do backup.",
+        },
+        { status: 422, headers: apiHeaders },
+      );
+    const result = await repository.save(parsed.data);
+    return Response.json(result, {
+      headers: { ...apiHeaders, ETag: `"revision-${result.revision}"` },
+    });
+  });
+}

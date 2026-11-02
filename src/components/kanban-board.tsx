@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { getEditToken } from "@/hooks/use-crm";
 import {
   DndContext,
   DragOverlay,
@@ -244,10 +245,16 @@ export function KanbanBoard({
   deals: Deal[];
   onOpen: (d: Deal) => void;
   onAdd: (stageId: string) => void;
-  onMove: (dealId: string, stageId: string, beforeId?: string) => void;
+  onMove: (
+    dealId: string,
+    stageId: string,
+    beforeId?: string,
+    editToken?: number,
+  ) => void;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
+  const dragEditToken = useRef(0);
   const keyboardCoordinates: KeyboardCoordinateGetter = (
     event,
     { context, currentCoordinates },
@@ -325,7 +332,7 @@ export function KanbanBoard({
       beforeId =
         ordered[ordered.findIndex((d) => d.id === targetDeal.id) + 1]?.id;
     }
-    onMove(String(active.id), stageId, beforeId);
+    onMove(String(active.id), stageId, beforeId, dragEditToken.current);
   };
   return (
     <DndContext
@@ -348,7 +355,10 @@ export function KanbanBoard({
           onDragCancel: () => "Movimentação cancelada.",
         },
       }}
-      onDragStart={({ active }) => setActiveId(String(active.id))}
+      onDragStart={({ active }) => {
+        dragEditToken.current = getEditToken();
+        setActiveId(String(active.id));
+      }}
       onDragOver={({ over }) =>
         setOverStage(
           over ? String(over.data.current?.stageId || over.id) : null,

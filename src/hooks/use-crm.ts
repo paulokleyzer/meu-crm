@@ -3,100 +3,151 @@
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { CrmData } from "@/lib/types";
-import { LocalCrmRepository, STORAGE_KEY } from "@/lib/repository";
-import { createSeedData } from "@/lib/seed";
+import type { UpdateCrm, VersionedData } from "@/lib/api-types";
+import { ApiError, HttpCrmRepository } from "@/lib/http-repository";
 import { parseCrmData } from "@/lib/schema";
 
-type Snapshot = { data: CrmData | null; storageError: string };
-const serverSnapshot: Snapshot = { data: null, storageError: "" };
-let snapshot: Snapshot = serverSnapshot;
-let initialized = false;
-let locked = false;
+type Snapshot = {
+  data: CrmData | null;
+  storageError: string;
+  saving: boolean;
+  revision: number;
+};
+const serverSnapshot: Snapshot = {
+  data: null,
+  storageError: "",
+  saving: false,
+  revision: 0,
+};
+let snapshot = serverSnapshot;
+let confirmed: VersionedData | null = null;
+let initializing: Promise<void> | null = null;
+let externalEditToken = 0;
+let refreshing = false;
+let queue = Promise.resolve();
 const listeners = new Set<() => void>();
+const repository = new HttpCrmRepository();
+export function getEditToken() {
+  return externalEditToken;
+}
 function emit(next: Snapshot) {
   snapshot = next;
   listeners.forEach((listener) => listener());
 }
 
-function initialize() {
-  if (initialized) return;
-  initialized = true;
-  let data: CrmData;
-  let storageError = "";
+export async function refreshCrm() {
+  if (snapshot.saving || refreshing) return;
+  refreshing = true;
   try {
-    const repo = new LocalCrmRepository(window.localStorage);
-    const saved = repo.load();
-    data = saved || createSeedData();
-    if (!saved) repo.save(data);
+    const result = await repository.load();
+    if (snapshot.saving || (confirmed && result.revision < confirmed.revision))
+      return;
+    if (confirmed && result.revision !== confirmed.revision) {
+      externalEditToken++;
+      toast.info(
+        "Dados atualizados por outro dispositivo. Reabra formulários em edição antes de salvar.",
+      );
+    }
+    confirmed = result;
+    emit({ ...result, storageError: "", saving: false });
   } catch {
-    data = createSeedData();
-    locked = true;
-    storageError =
-      "Não foi possível ler ou salvar os dados locais. As alterações ficarão apenas nesta sessão. Exporte um backup antes de sair. Os dados anteriores foram preservados.";
-  }
-  emit({ data, storageError });
-}
-
-function sync(event: StorageEvent) {
-  if (event.key !== STORAGE_KEY || !event.newValue) return;
-  try {
-    const data = parseCrmData(JSON.parse(event.newValue));
-    emit({ ...snapshot, data });
-    toast.info(
-      "Dados atualizados em outra aba. Reabra formulários em edição para usar a versão mais recente.",
-    );
-  } catch {
-    locked = true;
     emit({
       ...snapshot,
       storageError:
-        "Outra aba gravou dados inválidos. Exporte um backup antes de recarregar.",
+        "Não foi possível acessar o PostgreSQL. As alterações precisam de confirmação do servidor. Verifique a conexão e tente novamente.",
     });
+  } finally {
+    refreshing = false;
   }
 }
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  initialize();
-  if (listeners.size === 1) window.addEventListener("storage", sync);
-  return () => {
-    listeners.delete(listener);
-    if (!listeners.size) window.removeEventListener("storage", sync);
-  };
+function initialize() {
+  return (initializing ||= refreshCrm());
 }
 function getSnapshot() {
   return snapshot;
 }
-
-function update(recipe: (data: CrmData) => CrmData): boolean {
-  if (!snapshot.data) return false;
-  try {
-    const data = parseCrmData(recipe(snapshot.data));
-    let storageError = snapshot.storageError;
-    if (!locked) {
-      try {
-        new LocalCrmRepository(window.localStorage).save(data);
-        storageError = "";
-      } catch {
-        storageError =
-          "O armazenamento local está indisponível ou cheio. Alterações apenas nesta sessão; exporte um backup antes de sair.";
-      }
-    }
-    emit({ data, storageError });
-    return true;
-  } catch (error) {
-    toast.error(
-      error instanceof Error && !error.message.startsWith("[")
-        ? error.message
-        : "Verifique os campos. Os dados informados são inválidos.",
-    );
-    return false;
-  }
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  void initialize();
+  const timer = setInterval(() => {
+    if (document.visibilityState === "visible") void refreshCrm();
+  }, 2500);
+  const visible = () => {
+    if (document.visibilityState === "visible") void refreshCrm();
+  };
+  window.addEventListener("focus", visible);
+  document.addEventListener("visibilitychange", visible);
+  return () => {
+    listeners.delete(listener);
+    clearInterval(timer);
+    window.removeEventListener("focus", visible);
+    document.removeEventListener("visibilitychange", visible);
+  };
 }
-
+const update: UpdateCrm = (recipe, options = {}) => {
+  let resolve!: (result: boolean) => void;
+  const result = new Promise<boolean>((r) => {
+    resolve = r;
+  });
+  queue = queue
+    .then(async () => {
+      if (!confirmed) {
+        resolve(false);
+        return;
+      }
+      if (
+        options.editToken !== undefined &&
+        options.editToken !== externalEditToken
+      ) {
+        toast.error(
+          "Este formulário ficou desatualizado. Preserve suas anotações, feche e reabra os detalhes antes de salvar.",
+        );
+        resolve(false);
+        return;
+      }
+      try {
+        const data = parseCrmData(recipe(confirmed.data));
+        emit({ ...snapshot, data, saving: true, storageError: "" });
+        const saved = await repository.save({
+          data,
+          baseRevision: confirmed.revision,
+          requestId: crypto.randomUUID(),
+          operation: options.operation || "change",
+        });
+        if (saved.revision !== confirmed.revision + 1) externalEditToken++;
+        confirmed = saved;
+        emit({ ...saved, saving: false, storageError: "" });
+        resolve(true);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          externalEditToken++;
+          emit({ ...snapshot, data: confirmed.data, saving: false });
+          await refreshCrm();
+        }
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : "Não foi possível gravar a alteração. Os dados confirmados foram mantidos; revise os campos e tente novamente.";
+        emit({
+          ...snapshot,
+          data: confirmed.data,
+          revision: confirmed.revision,
+          saving: false,
+          storageError: message,
+        });
+        toast.error(message);
+        resolve(false);
+      }
+    })
+    .catch(() => {
+      resolve(false);
+    });
+  return result;
+};
 export function useCrm() {
   return {
     ...useSyncExternalStore(subscribe, getSnapshot, () => serverSnapshot),
     update,
+    refresh: refreshCrm,
   };
 }

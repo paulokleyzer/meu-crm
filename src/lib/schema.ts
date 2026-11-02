@@ -19,7 +19,15 @@ const customer = z.object({
 const deal = z.object({
   id,
   title: shortText,
-  value: z.number().finite().min(0).max(999_999_999_999),
+  value: z
+    .number()
+    .finite()
+    .min(0)
+    .max(999_999_999_999)
+    .refine(
+      (v) => Math.abs(v * 100 - Math.round(v * 100)) < 0.001,
+      "Use no máximo duas casas decimais.",
+    ),
   customerId: id,
   pipelineId: id,
   stageId: id,

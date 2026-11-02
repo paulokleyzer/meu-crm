@@ -55,7 +55,8 @@ import {
 } from "@/lib/crm";
 import { money } from "@/lib/format";
 import { parseCrmData } from "@/lib/schema";
-import { useCrm } from "@/hooks/use-crm";
+import { useCrm, getEditToken } from "@/hooks/use-crm";
+import type { UpdateCrm, UpdateOptions } from "@/lib/api-types";
 import {
   Button,
   Field,
@@ -81,10 +82,10 @@ const defaultFilters: DealFilters = {
   due: "",
 };
 type Section = "deals" | "customers" | "insights";
-type Update = (recipe: (data: CrmData) => CrmData) => boolean;
+type Update = UpdateCrm;
 
 export function CrmApp() {
-  const { data, update, storageError } = useCrm();
+  const { data, update, storageError, saving, refresh } = useCrm();
   if (!data)
     return (
       <div className="app-loading">
@@ -94,20 +95,32 @@ export function CrmApp() {
           <i />
         </span>
         <LoaderCircle className="spin" size={22} />
-        <p>Preparando seu espaço de trabalho…</p>
+        <p>{storageError || "Preparando seu espaço de trabalho…"}</p>
+        {storageError && (
+          <Button onClick={() => void refresh()}>Tentar novamente</Button>
+        )}
       </div>
     );
-  return <Workspace data={data} update={update} storageError={storageError} />;
+  return (
+    <Workspace
+      data={data}
+      update={update}
+      storageError={storageError}
+      saving={saving}
+    />
+  );
 }
 
 function Workspace({
   data,
   update,
   storageError,
+  saving,
 }: {
   data: CrmData;
   update: Update;
   storageError: string;
+  saving: boolean;
 }) {
   const [section, setSection] = useState<Section>("deals");
   const [pipelineId, setPipelineId] = useState(data.pipelines[0].id);
@@ -128,11 +141,13 @@ function Workspace({
   const [confirm, setConfirm] = useState<{
     kind: "pipeline" | "deal";
     id: string;
+    editToken: number;
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState("");
   const [help, setHelp] = useState(false);
   const [importData, setImportData] = useState<CrmData | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const importToken = useRef(0);
   const pipeline =
     data.pipelines.find((p) => p.id === pipelineId) || data.pipelines[0];
   const deals = filterDeals(data, pipeline.id, filters);
@@ -158,8 +173,12 @@ function Workspace({
     0,
   );
 
-  const apply = (recipe: (d: CrmData) => CrmData, message: string) => {
-    const ok = update(recipe);
+  const apply = async (
+    recipe: (d: CrmData) => CrmData,
+    message: string,
+    options: UpdateOptions = {},
+  ) => {
+    const ok = await update(recipe, options);
     if (ok) toast.success(message);
     return ok;
   };
@@ -172,10 +191,10 @@ function Workspace({
     setManaging(false);
     setPipelineEditor(p);
   };
-  const duplicate = (p: Pipeline) => {
+  const duplicate = async (p: Pipeline) => {
     let created = "";
     if (
-      apply((d) => {
+      await apply((d) => {
         const next = duplicatePipeline(d, p.id);
         created = next.pipelines.at(-1)!.id;
         return next;
@@ -188,12 +207,16 @@ function Workspace({
   const askDeletePipeline = (p: Pipeline) => {
     setManaging(false);
     setDeleteTarget(data.pipelines.find((x) => x.id !== p.id)?.id || "");
-    setConfirm({ kind: "pipeline", id: p.id });
+    setConfirm({ kind: "pipeline", id: p.id, editToken: getEditToken() });
   };
-  const handlePipelineSave = (input: PipelineInput, id?: string) => {
+  const handlePipelineSave = async (
+    input: PipelineInput,
+    id?: string,
+    editToken?: number,
+  ) => {
     let selected = id;
     if (
-      apply(
+      await apply(
         (d) => {
           const next = id
             ? updatePipeline(d, id, input)
@@ -202,6 +225,7 @@ function Workspace({
           return next;
         },
         id ? "Funil atualizado" : "Seu novo funil está pronto",
+        { editToken },
       )
     ) {
       setPipelineEditor(null);
@@ -209,30 +233,37 @@ function Workspace({
       setSection("deals");
     }
   };
-  const handleCustomerSave = (
+  const handleCustomerSave = async (
     input: CustomerInput,
     id?: string,
-  ): string | undefined => {
+    editToken?: number,
+  ): Promise<string | undefined> => {
     let saved = id;
     if (
-      apply(
+      await apply(
         (d) => {
           const next = saveCustomer(d, input, id);
           saved ||= next.customers.at(-1)!.id;
           return next;
         },
         id ? "Cliente atualizado" : "Cliente cadastrado",
+        { editToken },
       )
     ) {
       setCustomerDialog(null);
       return saved;
     }
   };
-  const handleDealSave = (input: DealInput, id?: string) => {
+  const handleDealSave = async (
+    input: DealInput,
+    id?: string,
+    editToken?: number,
+  ) => {
     if (
-      apply(
+      await apply(
         (d) => saveDeal(d, input, id),
         id ? "Oportunidade atualizada" : "Nova oportunidade criada",
+        { editToken },
       )
     ) {
       setDealDialog(null);
@@ -313,7 +344,7 @@ function Workspace({
           >
             <div className="menu-profile">
               <strong>Meu espaço de trabalho</strong>
-              <span>Versão local · sem login</span>
+              <span>PostgreSQL · acesso protegido</span>
             </div>
             <MenuSeparator />
             <MenuItem onSelect={exportBackup}>
@@ -692,10 +723,11 @@ function Workspace({
                     deals={deals}
                     onOpen={openDeal}
                     onAdd={(stageId) => setDealDialog({ stageId })}
-                    onMove={(id, stageId, beforeId) => {
-                      apply(
+                    onMove={async (id, stageId, beforeId, editToken) => {
+                      await apply(
                         (d) => moveDeal(d, id, stageId, beforeId),
                         `Oportunidade atualizada · ${pipeline.stages.find((s) => s.id === stageId)?.name}`,
+                        { editToken },
                       );
                     }}
                   />
@@ -716,8 +748,10 @@ function Workspace({
                 <span>
                   <CloudCheck size={14} />
                   {storageError
-                    ? "Apenas nesta sessão"
-                    : "Salvo neste navegador"}
+                    ? "Gravação não confirmada"
+                    : saving
+                      ? "Salvando no PostgreSQL…"
+                      : "Salvo no PostgreSQL"}
                 </span>
               </footer>
             </>
@@ -750,8 +784,12 @@ function Workspace({
           stageId={dealDialog.stageId}
           onClose={() => setDealDialog(null)}
           onSave={handleDealSave}
-          onDelete={(deal) => setConfirm({ kind: "deal", id: deal.id })}
-          onSaveCustomer={handleCustomerSave}
+          onDelete={(deal) =>
+            setConfirm({ kind: "deal", id: deal.id, editToken: getEditToken() })
+          }
+          onSaveCustomer={(input, token) =>
+            handleCustomerSave(input, undefined, token)
+          }
         />
       )}
       {customerDialog && (
@@ -883,9 +921,9 @@ function Workspace({
             <Button onClick={() => setConfirm(null)}>Cancelar</Button>
             <Button
               variant="danger"
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  apply(
+                  await apply(
                     (d) =>
                       confirm.kind === "pipeline"
                         ? deletePipeline(d, confirm.id, deleteTarget)
@@ -893,6 +931,7 @@ function Workspace({
                     confirm.kind === "pipeline"
                       ? "Funil excluído; oportunidades preservadas"
                       : "Oportunidade excluída",
+                    { editToken: confirm.editToken },
                   )
                 ) {
                   if (confirm.kind === "pipeline") setPipelineId(deleteTarget);
@@ -940,10 +979,10 @@ function Workspace({
             <div className="notice">
               <ShieldCheck size={18} />
               <span>
-                Os dados iniciais são fictícios e ficam apenas neste navegador.
-                Não há login nem sincronização com outros dispositivos. Exporte
-                backups pelo menu do seu avatar. Use dados de teste nesta
-                versão.
+                Os dados são compartilhados pelo PostgreSQL e sincronizados
+                entre dispositivos. O servidor confirma cada gravação e informa
+                conflitos. Exporte backups pelo menu do seu avatar. Use dados de
+                teste nesta versão.
               </span>
             </div>
             <Button onClick={exportBackup}>
@@ -973,6 +1012,7 @@ function Workspace({
           }
           try {
             setImportData(parseCrmData(JSON.parse(await file.text())));
+            importToken.current = getEditToken();
           } catch {
             toast.error(
               "Backup inválido ou de uma versão incompatível. Nenhum dado foi alterado.",
@@ -985,7 +1025,7 @@ function Workspace({
           open
           onOpenChange={(open) => !open && setImportData(null)}
           title="Restaurar este backup?"
-          description="Os dados deste navegador serão substituídos pelos dados do arquivo."
+          description="Os dados compartilhados no banco serão substituídos pelos dados do arquivo. Exporte um backup antes de continuar."
         >
           <div className="dialog-body form-stack">
             <p>
@@ -1001,8 +1041,13 @@ function Workspace({
             <Button onClick={() => setImportData(null)}>Cancelar</Button>
             <Button
               variant="primary"
-              onClick={() => {
-                if (apply(() => importData, "Backup restaurado")) {
+              onClick={async () => {
+                if (
+                  await apply(() => importData, "Backup restaurado", {
+                    operation: "import",
+                    editToken: importToken.current,
+                  })
+                ) {
                   setPipelineId(importData.pipelines[0].id);
                   setImportData(null);
                   setDealDialog(null);
