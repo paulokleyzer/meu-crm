@@ -21,14 +21,18 @@ async function decode(response: Response): Promise<VersionedData> {
   return { data: parseCrmData(result.data), revision: result.revision };
 }
 export class HttpCrmRepository {
-  async load(): Promise<VersionedData> {
-    return decode(
-      await fetch("/api/crm", {
-        credentials: "same-origin",
-        cache: "no-store",
-        signal: AbortSignal.timeout(12000),
-      }),
-    );
+  async load(knownRevision?: number): Promise<VersionedData | null> {
+    const response = await fetch("/api/crm", {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: AbortSignal.timeout(12000),
+      headers:
+        knownRevision === undefined
+          ? {}
+          : { "If-None-Match": `"revision-${knownRevision}"` },
+    });
+    if (response.status === 304) return null;
+    return decode(response);
   }
   async save(input: WriteRequest): Promise<VersionedData> {
     const options: RequestInit = {

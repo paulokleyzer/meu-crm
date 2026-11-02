@@ -1,7 +1,34 @@
 import { Pool, type PoolClient } from "pg";
+import {
+  getDatabase,
+  getConnectionString,
+  MissingDatabaseConnectionError,
+} from "@netlify/database";
 
 const globalDatabase = globalThis as typeof globalThis & { crmPool?: Pool };
-export function getPool() {
+// Official Netlify context supplies the database for the current deploy branch.
+// Never cache a Netlify connection globally: contexts may carry different URLs.
+const requestPools = new WeakSet<Pool>();
+export function getPool(): Pool {
+  let netlifyConnection: string | undefined;
+  try {
+    netlifyConnection = getConnectionString();
+  } catch (error) {
+    if (!(error instanceof MissingDatabaseConnectionError)) throw error;
+  }
+  if (netlifyConnection) {
+    // The SDK documents both pools as node-postgres compatible. Its serverless
+    // type also contains WebSocket-specific members; our SQL uses the pg contract.
+    const pool = getDatabase().pool as unknown as Pool;
+    pool.options.max = 2;
+    pool.options.connectionTimeoutMillis = 5000;
+    pool.options.idleTimeoutMillis = 1000;
+    pool.on("error", () => undefined);
+    requestPools.add(pool);
+    return pool;
+  }
+  if (process.env.NETLIFY === "true")
+    throw new Error("NETLIFY_DATABASE_NOT_CONFIGURED");
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_NOT_CONFIGURED");
   if (globalDatabase.crmPool) return globalDatabase.crmPool;
   const pool = new Pool({
@@ -11,8 +38,6 @@ export function getPool() {
     statement_timeout: 5000,
     application_name: "meu-crm",
   });
-  // A PostgreSQL restart closes idle connections. Handle that event so the
-  // application remains alive and the pool can reconnect on the next request.
   pool.on("error", () => {
     console.error(
       "Conexão PostgreSQL encerrada. O pool tentará reconectar na próxima requisição.",
@@ -20,6 +45,12 @@ export function getPool() {
   });
   globalDatabase.crmPool = pool;
   return pool;
+}
+export async function releaseRequestPool(pool: Pool) {
+  if (requestPools.has(pool)) {
+    requestPools.delete(pool);
+    await pool.end();
+  }
 }
 
 export async function transaction<T>(

@@ -6,6 +6,7 @@ import type { CrmData } from "@/lib/types";
 import type { UpdateCrm, VersionedData } from "@/lib/api-types";
 import { ApiError, HttpCrmRepository } from "@/lib/http-repository";
 import { parseCrmData } from "@/lib/schema";
+import { syncInterval } from "@/lib/sync-policy";
 
 type Snapshot = {
   data: CrmData | null;
@@ -27,6 +28,8 @@ let refreshing = false;
 let queue = Promise.resolve();
 const listeners = new Set<() => void>();
 const repository = new HttpCrmRepository();
+let lastActivity = Date.now();
+let lastRefresh = 0;
 export function getEditToken() {
   return externalEditToken;
 }
@@ -38,8 +41,13 @@ function emit(next: Snapshot) {
 export async function refreshCrm() {
   if (snapshot.saving || refreshing) return;
   refreshing = true;
+  lastRefresh = Date.now();
   try {
-    const result = await repository.load();
+    const result = await repository.load(confirmed?.revision);
+    if (!result) {
+      if (snapshot.storageError) emit({ ...snapshot, storageError: "" });
+      return;
+    }
     if (snapshot.saving || (confirmed && result.revision < confirmed.revision))
       return;
     if (confirmed && result.revision !== confirmed.revision) {
@@ -70,10 +78,23 @@ function subscribe(listener: () => void) {
   listeners.add(listener);
   void initialize();
   const timer = setInterval(() => {
-    if (document.visibilityState === "visible") void refreshCrm();
-  }, 2500);
+    const now = Date.now();
+    const interval = syncInterval(
+      document.visibilityState === "visible",
+      now - lastActivity,
+    );
+    if (interval !== null && now - lastRefresh >= interval) void refreshCrm();
+  }, 5000);
+  const activity = () => {
+    lastActivity = Date.now();
+  };
+  window.addEventListener("pointerdown", activity, { passive: true });
+  window.addEventListener("keydown", activity, { passive: true });
   const visible = () => {
-    if (document.visibilityState === "visible") void refreshCrm();
+    if (document.visibilityState === "visible") {
+      activity();
+      void refreshCrm();
+    }
   };
   window.addEventListener("focus", visible);
   document.addEventListener("visibilitychange", visible);
@@ -81,6 +102,8 @@ function subscribe(listener: () => void) {
     listeners.delete(listener);
     clearInterval(timer);
     window.removeEventListener("focus", visible);
+    window.removeEventListener("pointerdown", activity);
+    window.removeEventListener("keydown", activity);
     document.removeEventListener("visibilitychange", visible);
   };
 }

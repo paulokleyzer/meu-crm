@@ -1,5 +1,6 @@
 .git
 .next
+.netlify
 node_modules
 out
 deploy

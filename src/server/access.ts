@@ -3,9 +3,20 @@ import { createHash, timingSafeEqual } from "node:crypto";
 export function checkAccess(request: Request): Response | null {
   const user = process.env.CRM_BASIC_USER;
   const password = process.env.CRM_BASIC_PASSWORD;
-  const origin = process.env.CRM_ALLOWED_ORIGIN;
+  const origins = new Set(
+    [
+      process.env.CRM_ALLOWED_ORIGIN,
+      ...(process.env.NETLIFY === "true"
+        ? [
+            process.env.URL,
+            process.env.DEPLOY_PRIME_URL,
+            process.env.DEPLOY_URL,
+          ]
+        : []),
+    ].filter((value): value is string => Boolean(value)),
+  );
   const headers = { "Cache-Control": "no-store", Vary: "Authorization" };
-  if (!user || !password || password.length < 16 || !origin)
+  if (!user || !password || password.length < 16 || origins.size === 0)
     return Response.json(
       {
         error:
@@ -14,10 +25,12 @@ export function checkAccess(request: Request): Response | null {
       { status: 503, headers },
     );
   try {
-    const url = new URL(origin);
-    const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-    if (url.origin !== origin || (!local && url.protocol !== "https:"))
-      throw new Error();
+    for (const origin of origins) {
+      const url = new URL(origin);
+      const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+      if (url.origin !== origin || (!local && url.protocol !== "https:"))
+        throw new Error();
+    }
   } catch {
     return Response.json(
       { error: "Origem do CRM inválida; use HTTPS para acesso externo." },
@@ -42,7 +55,7 @@ export function checkAccess(request: Request): Response | null {
     );
   if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     if (
-      request.headers.get("origin") !== origin ||
+      !origins.has(request.headers.get("origin") || "") ||
       request.headers.get("sec-fetch-site") === "cross-site"
     )
       return Response.json(

@@ -20,6 +20,27 @@ function request(method = "GET", extra: Record<string, string> = {}) {
   });
 }
 describe("proteção do servidor sem tela de login", () => {
+  it("aceita somente origens de previews informadas pelo Netlify, não qualquer netlify.app", () => {
+    configure();
+    vi.stubEnv("NETLIFY", "true");
+    vi.stubEnv("DEPLOY_PRIME_URL", "https://preview--new-crm.netlify.app");
+    expect(
+      checkAccess(
+        request("PUT", {
+          origin: "https://preview--new-crm.netlify.app",
+          "content-type": "application/json",
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      checkAccess(
+        request("PUT", {
+          origin: "https://attacker.netlify.app",
+          "content-type": "application/json",
+        }),
+      )!.status,
+    ).toBe(403);
+  });
   it("falha fechado sem credenciais configuradas", () => {
     vi.stubEnv("CRM_BASIC_PASSWORD", "");
     expect(checkAccess(request())!.status).toBe(503);

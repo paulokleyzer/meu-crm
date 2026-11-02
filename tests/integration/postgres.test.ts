@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { migrate } from "@/server/migrate";
 import {
   IdempotencyConflict,
@@ -50,6 +53,64 @@ async function seed() {
 }
 
 describe("PostgreSQL real: persistência, concorrência e recuperação", () => {
+  it("atualiza o esquema anterior preservando registros, datas, valores e revisão", async () => {
+    const upgradeSchema = `${schema}_upgrade`;
+    const directory = await mkdtemp(join(tmpdir(), "crm-legacy-migration-"));
+    await admin.query(`CREATE SCHEMA ${upgradeSchema}`);
+    const legacy = new Pool({
+      connectionString: process.env.TEST_DATABASE_URL,
+      options: `-c search_path=${upgradeSchema}`,
+    });
+    try {
+      await copyFile(
+        join(process.cwd(), "netlify/database/migrations/001_crm.sql"),
+        join(directory, "001_crm.sql"),
+      );
+      await migrate(legacy, directory);
+      await legacy.query(
+        "INSERT INTO crm_customers(id,name,created_at) VALUES ('legacy-customer','Cliente fictício anterior','2026-01-02T03:04:05.123Z')",
+      );
+      await legacy.query(
+        `INSERT INTO crm_deals(id,title,value,customer_id,pipeline_id,stage_id,status,priority,owner,position,created_at,updated_at,expected_close_date)
+         VALUES ('legacy-deal','Oportunidade fictícia anterior',1234.56,'legacy-customer','pipeline-sales','stage-lead','open','medium','Equipe fictícia',0,'2026-01-02T03:04:05.123Z','2026-01-02T03:04:05.123Z','2026-03-04')`,
+      );
+      await legacy.query(
+        "INSERT INTO crm_activities VALUES ('legacy-activity','legacy-deal','Atividade fictícia anterior','2026-01-02T03:04:05.123Z',0)",
+      );
+      await legacy.query("UPDATE crm_state SET revision=7");
+      await migrate(legacy);
+      const recovered = await new PostgresCrmRepository(legacy).load();
+      expect(recovered.revision).toBe(7);
+      expect(recovered.data.customers[0].createdAt).toBe(
+        "2026-01-02T03:04:05.123Z",
+      );
+      expect(recovered.data.deals[0]).toMatchObject({
+        id: "legacy-deal",
+        value: 1234.56,
+        expectedCloseDate: "2026-03-04",
+        pipelineId: "pipeline-sales",
+        stageId: "stage-lead",
+      });
+      expect(recovered.data.activities[0].text).toBe(
+        "Atividade fictícia anterior",
+      );
+    } finally {
+      await legacy.end();
+      await admin.query(`DROP SCHEMA ${upgradeSchema} CASCADE`);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it("responde à revisão inalterada com uma única consulta sem ler entidades", async () => {
+    const base = await repo.load();
+    const spy = vi.spyOn(pool, "query");
+    try {
+      expect(await repo.loadIfChanged(base.revision)).toBeNull();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(String(spy.mock.calls[0][0])).toContain("CASE WHEN revision");
+    } finally {
+      spy.mockRestore();
+    }
+  });
   it("aplica as migrações de forma repetível e inicia um funil válido", async () => {
     await migrate(pool);
     const state = await repo.load();
@@ -109,6 +170,36 @@ describe("PostgreSQL real: persistência, concorrência e recuperação", () => 
     expect(deal.expectedCloseDate).toBe(data.deals[0].expectedCloseDate);
     expect(read.data.activities.at(-1)!.text).toContain("Reunião");
     expect(read.revision).toBe(saved.revision);
+  });
+  it("um movimento não regrava clientes e mantém o snapshot coerente com as tabelas", async () => {
+    const base = await seed();
+    await pool.query(
+      "CREATE FUNCTION protect_unchanged_customers() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'unnecessary write'; END $$",
+    );
+    await pool.query(
+      "CREATE TRIGGER protect_unchanged_customers BEFORE INSERT OR UPDATE ON crm_customers FOR EACH ROW EXECUTE FUNCTION protect_unchanged_customers()",
+    );
+    try {
+      const saved = await repo.save({
+        data: moveDeal(base.data, "deal-0", "partner-meeting"),
+        baseRevision: base.revision,
+        requestId: randomUUID(),
+        operation: "change",
+      });
+      const physical = (await pool.query("SELECT crm_build_snapshot() AS data"))
+        .rows[0].data;
+      const deal = physical.deals.find(
+        (d: { id: string }) => d.id === "deal-0",
+      );
+      expect(deal.stageId).toBe("partner-meeting");
+      expect(physical.customers).toHaveLength(saved.data.customers.length);
+      expect(physical.deals).toHaveLength(saved.data.deals.length);
+    } finally {
+      await pool.query(
+        "DROP TRIGGER protect_unchanged_customers ON crm_customers",
+      );
+      await pool.query("DROP FUNCTION protect_unchanged_customers()");
+    }
   });
   it("aceita só uma de duas gravações simultâneas da mesma revisão", async () => {
     const base = await seed();

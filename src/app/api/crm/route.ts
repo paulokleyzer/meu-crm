@@ -17,7 +17,18 @@ const writeSchema = z.object({
 
 export function GET(request: Request) {
   return protectedApi(request, async (repository) => {
-    const result = await repository.load();
+    const match = /^"revision-(\d+)"$/.exec(
+      request.headers.get("if-none-match") || "",
+    );
+    const revision = match ? Number(match[1]) : -1;
+    const result = await repository.loadIfChanged(
+      Number.isSafeInteger(revision) ? revision : -1,
+    );
+    if (!result)
+      return new Response(null, {
+        status: 304,
+        headers: { ...apiHeaders, ETag: `"revision-${revision}"` },
+      });
     return Response.json(result, {
       headers: { ...apiHeaders, ETag: `"revision-${result.revision}"` },
     });
@@ -25,10 +36,10 @@ export function GET(request: Request) {
 }
 export function PUT(request: Request) {
   return protectedApi(request, async (repository) => {
-    const maxBytes = 10 * 1024 * 1024;
+    const maxBytes = 4 * 1024 * 1024;
     if (Number(request.headers.get("content-length")) > maxBytes)
       return Response.json(
-        { error: "O backup deve ter até 10 MB." },
+        { error: "O backup deve ter até 4 MB." },
         { status: 413, headers: apiHeaders },
       );
     let input: unknown;
@@ -44,7 +55,7 @@ export function PUT(request: Request) {
         if (size > maxBytes) {
           await reader.cancel();
           return Response.json(
-            { error: "O backup deve ter até 10 MB." },
+            { error: "O backup deve ter até 4 MB." },
             { status: 413, headers: apiHeaders },
           );
         }

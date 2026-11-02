@@ -37,6 +37,7 @@ test("sincroniza dois dispositivos e impede salvar um formulário antigo sobre a
   });
   try {
     const second = await context.newPage();
+    await second.clock.install();
     await second.goto("/");
     await second.getByTestId("deal-deal-0").click();
     await second.getByLabel("Valor (R$)").fill("999");
@@ -48,6 +49,7 @@ test("sincroniza dois dispositivos e impede salvar um formulário antigo sobre a
       .getByRole("button", { name: "Salvar alterações", exact: true })
       .click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await second.clock.fastForward(35_000);
     await expect(
       second.getByText("Dados atualizados por outro dispositivo.", {
         exact: false,

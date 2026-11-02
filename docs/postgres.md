@@ -1,6 +1,6 @@
 # PostgreSQL, acesso protegido e instalação na VPS
 
-Esta branch (`feat/crm-postgres`) executa Next.js no servidor e armazena os dados no PostgreSQL. Não exige Supabase. O domínio, o layout, a navegação e os componentes dnd-kit são os mesmos da versão funcional anterior. As mudanças visíveis se limitam aos avisos de gravação/sincronização e aos textos que antes diziam que os dados ficavam apenas no navegador.
+Este guia descreve a instalação alternativa em servidor próprio, originada na branch `feat/crm-postgres`. Para a branch atual `feat/crm-netlify`, prefira o [guia Netlify sem VPS e sem Docker](netlify.md). Não exige Supabase. O domínio, o layout, a navegação e os componentes dnd-kit são os mesmos da versão funcional anterior. As mudanças visíveis se limitam aos avisos de gravação/sincronização e aos textos que antes diziam que os dados ficavam apenas no navegador.
 
 ## Executar no computador ou neste ambiente
 
@@ -104,7 +104,7 @@ Não há migração automática do `localStorage`, porque ele pertence a cada na
 
 ## Sincronização e conflitos
 
-A interface atualiza os dados periodicamente (2,5 segundos quando visível), ao voltar à aba e ao recuperar o foco. A confirmação “Salvo no PostgreSQL” aparece após a API confirmar a transação. Enquanto grava, o cartão pode se mover imediatamente; se a operação falhar, ele volta ao estado confirmado e o erro é exibido. Formulários não fecham nem exibem sucesso quando o banco recusa a gravação.
+Nesta branch, a interface atualiza a cada 30 segundos em atividade e 120 segundos após um minuto sem interação; pausa em aba oculta ou após cinco minutos inativa. Recuperar foco/visibilidade atualiza imediatamente. A confirmação “Salvo no PostgreSQL” aparece após a API confirmar a transação. Enquanto grava, o cartão pode se mover imediatamente; se a operação falhar, ele volta ao estado confirmado e o erro é exibido. Formulários não fecham nem exibem sucesso quando o banco recusa a gravação.
 
 Cada gravação carrega a revisão que o cliente leu e um UUID da requisição. O PostgreSQL bloqueia a revisão, compara o valor e grava dados + nova revisão + histórico na mesma transação. Uma requisição repetida com o mesmo ID e conteúdo é idempotente; o mesmo ID com outro conteúdo é rejeitado. Um cliente desatualizado recebe 409 e precisa revisar sua alteração. Formulários abertos antes de uma atualização remota também exigem reabertura para evitar sobrescrever dados novos com campos antigos.
 
@@ -116,7 +116,7 @@ O controle de revisão é do conjunto inteiro, adequado a esta primeira versão 
 - `PUT /api/crm`: `{ data, baseRevision, requestId, operation }`; `operation` é `change` ou `import`.
 - `GET /api/crm/history`: últimas 100 revisões, operação e data.
 
-Todos exigem autenticação. PUT também exige `Origin` exatamente igual a `CRM_ALLOWED_ORIGIN`, `Content-Type: application/json` e corpo de até 10 MB. Há validação de campos, IDs, referências, valores financeiros e versão do backup. Erros: 401 sem autenticação, 403 origem inválida, 413 corpo excedido, 415 formato incorreto, 422 dados inválidos, 409 conflito e 503 banco/configuração indisponíveis. Respostas não expõem senhas, URLs de conexão ou mensagens internas do PostgreSQL.
+Todos exigem autenticação. PUT também exige `Origin` exatamente igual à origem configurada (no Netlify também aceita as URLs exatas do deploy fornecidas pela plataforma), `Content-Type: application/json` e corpo de até 4 MB nesta branch. Há validação de campos, IDs, referências, valores financeiros e versão do backup. Erros: 401 sem autenticação, 403 origem inválida, 413 corpo excedido, 415 formato incorreto, 422 dados inválidos, 409 conflito e 503 banco/configuração indisponíveis. Respostas não expõem senhas, URLs de conexão ou mensagens internas do PostgreSQL.
 
 Os snapshots anteriores ficam no banco em `crm_history.before_data` e os posteriores em `after_data`. O histórico não é apagado por uma importação ou exclusão de oportunidade. As atividades visíveis de um negócio continuam no painel de detalhes; o histórico de transações não cria uma nova tela ou muda a navegação.
 

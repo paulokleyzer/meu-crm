@@ -1006,8 +1006,8 @@ function Workspace({
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
-          if (file.size > 10 * 1024 * 1024) {
-            toast.error("O backup deve ter no máximo 10 MB.");
+          if (file.size > 4 * 1024 * 1024) {
+            toast.error("O backup deve ter no máximo 4 MB.");
             return;
           }
           try {

@@ -2,7 +2,7 @@ name: Validar CRM
 
 on:
   push:
-    branches: [main, feat/crm-v1, feat/crm-postgres]
+    branches: [main, feat/crm-v1, feat/crm-postgres, feat/crm-netlify]
   pull_request:
     branches: [main]
 
@@ -39,6 +39,7 @@ jobs:
       - run: npm run db:migrate
       - run: npm run check
       - run: npm run test:db
+      - run: npm run test:netlify:db
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4

@@ -1,5 +1,5 @@
 import { checkAccess } from "./access";
-import { getPool } from "./database";
+import { getPool, releaseRequestPool } from "./database";
 import {
   IdempotencyConflict,
   PostgresCrmRepository,
@@ -16,8 +16,10 @@ export async function protectedApi(
 ) {
   const rejected = checkAccess(request);
   if (rejected) return rejected;
+  let pool: ReturnType<typeof getPool> | undefined;
   try {
-    return await action(new PostgresCrmRepository(getPool()));
+    pool = getPool();
+    return await action(new PostgresCrmRepository(pool));
   } catch (error) {
     if (error instanceof RevisionConflict)
       return Response.json(
@@ -45,5 +47,7 @@ export async function protectedApi(
       },
       { status: 503, headers: apiHeaders },
     );
+  } finally {
+    if (pool) await releaseRequestPool(pool).catch(() => undefined);
   }
 }

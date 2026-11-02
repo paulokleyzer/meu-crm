@@ -1,0 +1,95 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { NetlifyDB } from "@netlify/database-dev";
+import { getPool, releaseRequestPool } from "@/server/database";
+import { PostgresCrmRepository } from "@/server/postgres-repository";
+import { createSeedData } from "@/lib/seed";
+import { moveDeal } from "@/lib/crm";
+import { migrate } from "@/server/migrate";
+
+let directory: string;
+let db: NetlifyDB;
+beforeAll(async () => {
+  directory = await mkdtemp(join(tmpdir(), "crm-netlify-db-"));
+  db = new NetlifyDB({ directory, logger: () => undefined });
+  vi.stubEnv("NETLIFY_DB_URL", await db.start());
+  vi.stubEnv("NETLIFY_DB_DRIVER", "server");
+  vi.stubEnv("NETLIFY", "true");
+});
+afterAll(async () => {
+  await db?.stop();
+  vi.unstubAllEnvs();
+  if (directory) await rm(directory, { recursive: true, force: true });
+});
+it("aplica as migrações com o runner oficial, sem Docker, de forma repetível", async () => {
+  expect(
+    await db.applyMigrations(
+      join(process.cwd(), "netlify/database/migrations"),
+    ),
+  ).toEqual(["001_crm", "002_snapshot"]);
+  expect(
+    await db.applyMigrations(
+      join(process.cwd(), "netlify/database/migrations"),
+    ),
+  ).toEqual([]);
+  const pool = getPool();
+  try {
+    expect(
+      (await new PostgresCrmRepository(pool).load()).data.pipelines,
+    ).toHaveLength(1);
+  } finally {
+    await releaseRequestPool(pool);
+  }
+});
+it("usa o SDK oficial e persiste um movimento em uma etapa vazia", async () => {
+  const pool = getPool();
+  try {
+    const repo = new PostgresCrmRepository(pool),
+      initial = await repo.load();
+    const seeded = await repo.save({
+      data: createSeedData(),
+      baseRevision: initial.revision,
+      requestId: randomUUID(),
+      operation: "import",
+    });
+    await repo.save({
+      data: moveDeal(seeded.data, "deal-0", "partner-meeting"),
+      baseRevision: seeded.revision,
+      requestId: randomUUID(),
+      operation: "change",
+    });
+  } finally {
+    await releaseRequestPool(pool);
+  }
+});
+it("impede misturar o runner legado com migrações oficiais já aplicadas", async () => {
+  const pool = getPool();
+  try {
+    await expect(migrate(pool)).rejects.toThrow(
+      "NETLIFY_MIGRATIONS_USE_OFFICIAL_RUNNER",
+    );
+  } finally {
+    await releaseRequestPool(pool);
+  }
+});
+it("recupera os dados após parar e reabrir o Netlify Database local", async () => {
+  await db.stop();
+  db = new NetlifyDB({ directory, logger: () => undefined });
+  vi.stubEnv("NETLIFY_DB_URL", await db.start());
+  const pool = getPool();
+  try {
+    const state = await new PostgresCrmRepository(pool).load();
+    expect(state.data.deals.find((d) => d.id === "deal-0")).toMatchObject({
+      stageId: "partner-meeting",
+      pipelineId: "pipeline-partners",
+    });
+    expect(
+      await new PostgresCrmRepository(pool).loadIfChanged(state.revision),
+    ).toBeNull();
+  } finally {
+    await releaseRequestPool(pool);
+  }
+});

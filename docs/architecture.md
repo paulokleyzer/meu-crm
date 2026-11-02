@@ -1,6 +1,6 @@
 # Arquitetura do CRM com PostgreSQL
 
-A branch `feat/crm-postgres` mantém os componentes da primeira versão e substitui a persistência ativa por uma API Next.js com PostgreSQL. O esquema do backup continua `schemaVersion: 1`; os IDs de texto da versão anterior são aceitos. A versão estática publicada no Netlify e o ZIP anterior não são modificados.
+A branch `feat/crm-netlify`, baseada em `feat/crm-postgres`, mantém os componentes da primeira versão e usa API Next.js com PostgreSQL pelo SDK oficial `@netlify/database`. O esquema do backup continua `schemaVersion: 1`; os IDs de texto da versão anterior são aceitos. A versão estática publicada no Netlify e o ZIP anterior não são modificados.
 
 ## Fluxo de dados
 
@@ -18,23 +18,23 @@ A UI não escreve no `localStorage` nem usa dados fictícios de fallback quando 
 
 `crm_pipelines`, `crm_stages`, `crm_customers`, `crm_deals` e `crm_activities` armazenam as entidades separadamente. Etapas e oportunidades usam chaves estrangeiras; a referência composta garante que a etapa pertence ao funil. Valores usam `numeric(14,2)`, datas usam `date`/`timestamptz`, e posições mantêm a ordem do quadro.
 
-`crm_state` possui a revisão única do conjunto. `crm_history` é append-only pela aplicação e registra revisão, UUID da requisição, hash do conteúdo, operação e snapshots anterior/posterior. Importar um backup não apaga o histórico de transações. As atividades visíveis de cada negócio continuam no painel de detalhes, sem mudança de navegação.
+`crm_state` possui a revisão única do conjunto e um snapshot JSONB de leitura. `crm_history` é append-only pela aplicação e registra revisão, UUID da requisição, hash do conteúdo, operação e snapshots anterior/posterior. Importar um backup não apaga o histórico de transações. As atividades visíveis de cada negócio continuam no painel de detalhes, sem mudança de navegação.
 
-Uma gravação bloqueia a linha de revisão, verifica a versão, substitui as entidades na ordem exigida pelas chaves estrangeiras e grava histórico + revisão na mesma transação. Leitores usam transação read-only com snapshot repeatable-read: recebem um conjunto inteiro, nunca uma atualização parcial. Qualquer erro SQL causa rollback de tudo. A validação Zod rejeita referências órfãs, IDs duplicados, funis sem etapas, valores inválidos e backups incompatíveis antes da escrita.
+Uma gravação bloqueia a linha de revisão, verifica a versão, compara entidades e executa upserts em lote apenas das linhas alteradas, além das exclusões explícitas. Restrições de posição e referências adiadas validam o estado final no commit. Linhas normalizadas, snapshot, histórico e revisão mudam na mesma transação. Uma única leitura SQL recupera o snapshot confirmado; uma revisão inalterada retorna 304 sem transferi-lo. Não edite tabelas diretamente: uma escrita externa deverá usar o repositório para manter o snapshot coerente. Qualquer erro causa rollback de tudo. Zod rejeita referências órfãs, IDs duplicados, funis sem etapas, valores inválidos e backups incompatíveis.
 
 ## Concorrência e sincronização
 
 Dois clientes que gravam a mesma revisão não podem ter ambos sucesso: o segundo recebe 409. Repetir uma requisição já confirmada com o mesmo ID/conteúdo não gera outra gravação. Campos de formulários não são reaplicados automaticamente após conflito. Mudanças remotas invalidam o token de edição de formulários e movimentos em andamento, exigindo revisão/reabertura.
 
-O protocolo atual usa snapshots completos e revisão global, adequado a esta primeira versão centralizada. Não há mesclagem automática, colaboração por campo, paginação da base ou fila offline. A evolução para bases maiores é endpoints de comandos com revisão por entidade e escrita incremental; o domínio e os IDs estáveis já estão separados para essa evolução.
+O protocolo HTTP usa snapshots completos e revisão global; a escrita SQL é incremental. Não há mesclagem por campo, paginação ou fila offline. Para bases maiores, a evolução é endpoints de comandos e revisão por entidade. A sincronização consulta a cada 30 segundos em atividade, 120 segundos após um minuto sem interação e pausa em aba oculta ou após cinco minutos inativa. Foco/visibilidade atualizam imediatamente. Um 304 ainda utiliza Function e banco; monitore os créditos.
 
 ## Acesso e implantação
 
-HTTP Basic protege a aplicação e a API, sem tela de login ou níveis de acesso no CRM. Credenciais/origem ausentes falham fechado. Gravações exigem origem exata e JSON, com tamanho limitado. Para acesso externo, o servidor exige uma origem HTTPS; a implantação usa proxy reverso TLS, aplicativo em loopback e banco na rede privada. Credenciais nunca são enviadas no bundle cliente nem colocadas em `NEXT_PUBLIC_*`.
+HTTP Basic protege a aplicação e a API, sem tela de login ou níveis de acesso no CRM. Credenciais/origem ausentes falham fechado. Gravações exigem origem exata e JSON, com limite de 4 MB. Para acesso externo, o servidor exige HTTPS; no Netlify o TLS e a execução são gerenciados pela plataforma, enquanto na VPS usa-se proxy reverso TLS e aplicativo em loopback. Credenciais nunca são enviadas no bundle cliente nem colocadas em `NEXT_PUBLIC_*`.
 
 A proteção é de um espaço compartilhado. Ela não identifica autores individuais e não equivale a autenticação multiusuário. Essa será outra etapa antes de introduzir permissões ou auditoria por pessoa.
 
-O [guia operacional](postgres.md) contém configuração local, Docker/VPS, migrações, importação v1, backups e testes. Não há dependência de Supabase. Migrações são versionadas e conferidas por checksum, sem instalação automática ou seed em cada inicialização.
+O [guia Netlify](netlify.md) descreve o segundo projeto, Database oficial, migrações e validação. O SDK usa a conexão do contexto atual de execução; pools Netlify têm até duas conexões e são encerrados por requisição, sem cache global que misture branches. Fora do Netlify, o pool nativo e a instalação [VPS](postgres.md) continuam disponíveis. O runner oficial e o legado não devem ser misturados no mesmo banco. Não há seed automático nem Supabase.
 
 ## WhatsApp Business e IA
 

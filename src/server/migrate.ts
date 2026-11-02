@@ -6,10 +6,15 @@ import { transaction } from "./database";
 
 export async function migrate(
   pool: Pool,
-  directory = join(process.cwd(), "db/migrations"),
+  directory = join(process.cwd(), "netlify/database/migrations"),
 ) {
   await transaction(pool, async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(74382910)");
+    const official = await client.query(
+      "SELECT to_regclass('netlify.migrations') AS tracking",
+    );
+    if (official.rows[0].tracking)
+      throw new Error("NETLIFY_MIGRATIONS_USE_OFFICIAL_RUNNER");
     await client.query(
       "CREATE TABLE IF NOT EXISTS crm_migrations (name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())",
     );
