@@ -6,7 +6,7 @@ A branch **`feat/crm-v2`** parte de `feat/crm-netlify` (`42de3fe`). Preserva os 
 
 **Esta é uma demonstração compartilhada sem senha. Use somente dados fictícios.** Qualquer pessoa com a URL pode consultar e alterar os dados. Validação, origem, limites e concorrência reduzem abusos, mas não são autenticação. A proteção Basic continua disponível por configuração do servidor, sem tela de login.
 
-O site **`lucky-donut-3d0c63.netlify.app`**, `main` e as branches anteriores permanecem independentes. Não publique esta versão no projeto antigo. Nenhum comando de teste faz deploy.
+O projeto existente **`lucky-donut-3d0c63`** será o destino da publicação futura. A versão atual continua no ar: mantenha `CRM_DEPLOY_V2=false` e builds/publicações automáticos pausados enquanto conecta GitHub e configura variáveis. Não houve deploy nesta preparação, e `main` não foi alterada.
 
 ## Executar sem Docker
 
@@ -22,7 +22,7 @@ npm run netlify:dev
 
 Abra **http://localhost:8888** no computador que executou os comandos. Não há solicitação de senha. O Netlify Dev usa seu banco local oficial, persistido em `.netlify/db`; não precisa de VPS, Supabase ou Docker.
 
-O setup não sobrescreve `.env.local`. Se já existir, use `CRM_ACCESS_MODE=demo` e `CRM_ALLOWED_ORIGIN=http://localhost:8888` para este modo. O banco local não é enviado à nuvem automaticamente. O [guia Netlify](docs/netlify.md) explica a configuração e a publicação no segundo projeto.
+O setup não sobrescreve `.env.local`. Se já existir, use `CRM_ACCESS_MODE=demo` e `CRM_ALLOWED_ORIGIN=http://localhost:8888` para este modo. O banco local não é enviado à nuvem automaticamente. O [guia Netlify](docs/netlify.md) explica a preparação e a publicação autorizada no projeto existente.
 
 ## Funcionalidades
 
@@ -59,6 +59,6 @@ Instale o Chromium (`npx playwright install --with-deps chromium`) ou informe `P
 
 ## Publicação
 
-Use somente o **segundo projeto de testes** no Netlify, com a branch `feat/crm-v2`, build `npm run build:netlify`, publish `.next` e Node.js 24. A regra `build.ignore` pula builds até você definir **`CRM_DEPLOY_V2=true` nesse projeto**. O nome/endereço do projeto antigo continua bloqueado mesmo com essa variável.
+Use o projeto existente **`lucky-donut-3d0c63`**, branch `feat/crm-v2`, build `npm run build:netlify`, publish `.next` e Node.js 24. O bloqueio por nome/endereço foi removido. `build.ignore` e o comando de build exigem **`CRM_DEPLOY_V2=true`**; mantenha **`false` até autorizar a publicação**.
 
-O [passo a passo](docs/netlify.md) explica as variáveis, migrações e conferência da nova URL. Publicação/provisionamento hospedados dependem da sua conta e não são comprovados apenas pelos testes locais. Nenhuma publicação automática foi realizada nesta tarefa.
+O [passo a passo](docs/netlify.md) separa a conexão do GitHub/configuração de variáveis da publicação futura no mesmo endereço. Pause builds/publicações automáticos antes de conectar o repositório. O Netlify Database, as migrações e a demonstração sem senha foram preservados. Nenhuma publicação foi executada.

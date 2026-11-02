@@ -2,7 +2,7 @@
 
 Este guia descreve a instalação alternativa em servidor próprio, originada na branch `feat/crm-postgres`. Para a branch atual `feat/crm-netlify`, prefira o [guia Netlify sem VPS e sem Docker](netlify.md). Não exige Supabase. O domínio, o layout, a navegação e os componentes dnd-kit são os mesmos da versão funcional anterior. As mudanças visíveis se limitam aos avisos de gravação/sincronização e aos textos que antes diziam que os dados ficavam apenas no navegador.
 
-A v2 é uma demonstração sem senha por padrão. Este guia alternativo mantém o perfil VPS com `CRM_ACCESS_MODE=basic` (padrão do Compose VPS) e credenciais configuradas. Não use dados reais no modo `demo`. O procedimento recomendado desta etapa é o segundo projeto Netlify.
+A v2 é uma demonstração sem senha por padrão. Este guia alternativo mantém o perfil VPS com `CRM_ACCESS_MODE=basic` (padrão do Compose VPS) e credenciais configuradas. Não use dados reais no modo `demo`. O procedimento recomendado está no [guia do projeto Netlify existente](netlify.md); a publicação continua dependendo de autorização e `CRM_DEPLOY_V2=true`.
 
 ## Executar no computador ou neste ambiente
 

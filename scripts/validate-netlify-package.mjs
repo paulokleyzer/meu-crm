@@ -51,6 +51,8 @@ const result = spawnSync(
     stdio: "inherit",
     env: {
       ...process.env,
+      // Only this unlinked, offline fixture enables the guarded build.
+      CRM_DEPLOY_V2: "true",
       NETLIFY_TELEMETRY_DISABLED: "1",
       XDG_CONFIG_HOME: join(fixture, ".cli-config"),
     },

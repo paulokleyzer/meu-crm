@@ -34,7 +34,7 @@ A demonstração usa `CRM_ACCESS_MODE=demo`, público e sem senha. A proteção 
 
 A proteção é de um espaço compartilhado. Ela não identifica autores individuais e não equivale a autenticação multiusuário. Essa será outra etapa antes de introduzir permissões ou auditoria por pessoa.
 
-O [guia Netlify](netlify.md) descreve o segundo projeto, Database oficial, migrações e validação. O SDK usa a conexão do contexto atual de execução; pools Netlify têm até duas conexões e são encerrados por requisição, sem cache global que misture branches. Fora do Netlify, o pool nativo e a instalação [VPS](postgres.md) continuam disponíveis. O runner oficial e o legado não devem ser misturados no mesmo banco. Não há seed automático nem Supabase.
+O [guia Netlify](netlify.md) descreve a preparação no projeto existente `lucky-donut-3d0c63`, a trava `CRM_DEPLOY_V2`, Database oficial, migrações e validação. O SDK usa a conexão do contexto atual de execução; pools Netlify têm até duas conexões e são encerrados por requisição, sem cache global que misture branches. Fora do Netlify, o pool nativo e a instalação [VPS](postgres.md) continuam disponíveis. O runner oficial e o legado não devem ser misturados no mesmo banco. Não há seed automático nem Supabase.
 
 ## WhatsApp Business e IA
 

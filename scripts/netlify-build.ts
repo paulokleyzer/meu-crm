@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { assertSeparateNetlifyProject } from "../src/lib/deployment-policy";
-assertSeparateNetlifyProject(process.env);
+import { assertNetlifyDeploymentEnabled } from "../src/lib/deployment-policy";
+// Enforce the same switch even when a forced build bypasses build.ignore.
+assertNetlifyDeploymentEnabled(process.env);
 const result = spawnSync(
   process.execPath,
   ["node_modules/next/dist/bin/next", "build"],
