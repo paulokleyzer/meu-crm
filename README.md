@@ -36,7 +36,9 @@ npm ci
 npm run dev
 ```
 
-Abra **http://localhost:3000**. O servidor escuta em `0.0.0.0`; no ambiente na nuvem, use o encaminhamento da porta 3000 disponível na sua ferramenta. O processo precisa continuar em execução.
+Ao executar no seu computador, abra **http://localhost:3000**. O servidor escuta em `0.0.0.0` e precisa continuar em execução. O ambiente na nuvem deste chat não disponibiliza uma URL pública de prévia nem um recurso de encaminhamento de portas; o endereço local dele não é acessível pelo seu computador.
+
+Para acessar pelo navegador sem instalar o projeto no seu computador, publique a versão estática em uma hospedagem. O [guia para a Hostinger](docs/hostinger.md) descreve como enviar o pacote para um domínio ou subdomínio de testes.
 
 Em um checkout já existente, execute `npm ci` e `npm run dev` na raiz do projeto. Cada tarefa na nuvem já é isolada: use o checkout existente, sem criar outro worktree.
 
