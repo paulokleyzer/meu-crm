@@ -39,6 +39,7 @@ it("aplica as migrações com o runner oficial, sem Docker, de forma repetível"
     "002_snapshot",
     "003_crm_v2",
     "004_whatsapp_foundation",
+    "005_chat_import_audit",
   ]);
   expect(
     await db.applyMigrations(
