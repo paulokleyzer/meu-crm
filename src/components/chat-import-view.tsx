@@ -362,7 +362,7 @@ export function ChatImportView({
           <AlertTriangle size={20} />
           <div>
             <strong>Modo demonstração público: não carregue conversas reais aqui.</strong>
-            <p>O processamento preliminar ocorre no navegador. A análise por IA e a gravação de contatos importados só estarão disponíveis após configurar CRM_ACCESS_MODE=basic com senha segura.</p>
+            <p>A leitura e a triagem preliminar ficam no seu navegador. A análise por IA e o cadastro de conversas reais ainda não estão disponíveis nesta versão, para não expor dados de clientes.</p>
           </div>
         </div>
       ) : (
