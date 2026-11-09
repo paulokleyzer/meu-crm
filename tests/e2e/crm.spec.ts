@@ -90,8 +90,9 @@ test("aceita arrastar para uma coluna completamente vazia", async ({
     page.getByText("Salvo no PostgreSQL", { exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Selecionar funil:" }).click();
-  await page.getByRole("menuitem", { name: "Parcerias", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Selecionar funil: Parcerias" }),
+  ).toBeVisible();
   await expect(empty.getByTestId("deal-deal-partner")).toBeVisible();
 });
 

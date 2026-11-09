@@ -157,7 +157,27 @@ function Workspace({
       );
     }
   }, [data.scheduledActivities, now]);
-  const [pipelineId, setPipelineId] = useState(data.pipelines[0].id);
+  const [pipelineId, setPipelineId] = useState(() => {
+    // A escolha do funil é uma preferência local, não um dado comercial.
+    try {
+      const selected = window.localStorage.getItem("meu-crm:selected-pipeline");
+      if (data.pipelines.some((p) => p.id === selected)) return selected!;
+    } catch {
+      // O CRM deve funcionar mesmo quando o armazenamento estiver bloqueado.
+    }
+    return data.pipelines[0].id;
+  });
+  useEffect(() => {
+    const selected = data.pipelines.some((p) => p.id === pipelineId)
+      ? pipelineId
+      : data.pipelines[0]?.id;
+    if (!selected) return;
+    try {
+      window.localStorage.setItem("meu-crm:selected-pipeline", selected);
+    } catch {
+      // Não impede a navegação quando o navegador bloquear o armazenamento.
+    }
+  }, [pipelineId, data.pipelines]);
   const [view, setView] = useState<"board" | "list">("board");
   const [filters, setFilters] = useState<DealFilters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
