@@ -308,9 +308,6 @@ test("aplica regras na criação manual, filtra por tipo e origem e mostra resul
   await page
     .getByRole("button", { name: "Nova oportunidade", exact: true })
     .click();
-  await page
-    .getByLabel("Título da oportunidade")
-    .fill("Negócio automático de teste");
   await page.getByLabel("Valor (R$)").fill("1234.56");
   await page.getByLabel("Cliente", { exact: false }).selectOption("customer-0");
   await page
@@ -338,6 +335,9 @@ test("aplica regras na criação manual, filtra por tipo e origem e mostra resul
     .getByLabel("Origem comercial", { exact: true })
     .selectOption("Tráfego pago de teste");
   await expect(page.locator(".deal-card")).toHaveCount(1);
+  await expect(page.locator(".deal-card .card-title")).toContainText(
+    "Motos elétricas de teste",
+  );
   await page.getByRole("button", { name: "Visão geral", exact: true }).click();
   for (const title of [
     "Conversão por funil",

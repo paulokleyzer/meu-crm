@@ -66,6 +66,7 @@ export function DealDialog({
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [status, setStatus] = useState<DealStatus>(deal?.status || "open");
   const customer = data.customers.find((c) => c.id === customerId);
+  const businessType = data.businessTypes.find((type) => type.id === businessTypeId);
   const history = data.activities
     .filter((a) => a.dealId === deal?.id)
     .slice(-5)
@@ -92,7 +93,13 @@ export function DealDialog({
             try {
               await onSave(
                 {
-                  title: String(f.get("title")).trim(),
+                  // Gera o título automaticamente, preservando os títulos antigos.
+                  title:
+                    deal?.title ||
+                    [customer?.name, businessType?.name]
+                      .filter(Boolean)
+                      .join(" — ")
+                      .slice(0, 120),
                   value: Number(f.get("value")),
                   customerId,
                   pipelineId: pipeline.id,
@@ -128,20 +135,11 @@ export function DealDialog({
                 </span>
               </div>
             )}
-            <Field label="Título da oportunidade *">
-              <input
-                name="title"
-                autoFocus
-                defaultValue={deal?.title}
-                required
-                maxLength={120}
-                placeholder="Ex.: Projeto de expansão"
-              />
-            </Field>
             <div className="form-grid">
               <Field label="Valor (R$) *">
                 <input
                   name="value"
+                  autoFocus
                   type="number"
                   min={0}
                   max={999999999999}

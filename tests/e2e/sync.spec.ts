@@ -40,7 +40,7 @@ test("sincroniza dois dispositivos e impede salvar um formulário antigo sobre a
     await second.getByLabel("Valor (R$)").fill("999");
     await page.getByTestId("deal-deal-0").click();
     await page
-      .getByLabel("Título da oportunidade")
+      .getByLabel("Anotações")
       .fill("Contrato atualizado no dispositivo A");
     await page
       .getByRole("button", { name: "Salvar alterações", exact: true })
@@ -65,11 +65,12 @@ test("sincroniza dois dispositivos e impede salvar um formulário antigo sobre a
     expect(
       state.data.deals.find((d: { id: string }) => d.id === "deal-0"),
     ).toMatchObject({
-      title: "Contrato atualizado no dispositivo A",
+      notes: "Contrato atualizado no dispositivo A",
       value: 8500,
     });
     await second.getByRole("button", { name: "Cancelar", exact: true }).click();
-    await expect(second.getByTestId("deal-deal-0")).toContainText(
+    await second.getByTestId("deal-deal-0").click();
+    await expect(second.getByLabel("Anotações")).toHaveValue(
       "Contrato atualizado no dispositivo A",
     );
   } finally {

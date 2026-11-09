@@ -126,9 +126,7 @@ test("cadastra cliente dentro de uma oportunidade e edita seus detalhes", async 
   await page
     .getByRole("button", { name: "Nova oportunidade", exact: true })
     .click();
-  await page
-    .getByLabel("Título da oportunidade")
-    .fill("Contrato de implantação");
+  await expect(page.getByLabel("Título da oportunidade")).toHaveCount(0);
   await page.getByLabel("Valor (R$)").fill("14990.50");
   await page
     .getByRole("button", { name: "Cadastrar cliente", exact: true })
@@ -154,7 +152,7 @@ test("cadastra cliente dentro de uma oportunidade e edita seus detalhes", async 
     .getByRole("button", { name: "Criar oportunidade", exact: true })
     .click();
   const card = page.getByRole("button", {
-    name: "Abrir oportunidade Contrato de implantação",
+    name: "Abrir oportunidade Carolina Teste",
     exact: true,
   });
   await expect(card).toBeVisible();
@@ -163,7 +161,6 @@ test("cadastra cliente dentro de uma oportunidade e edita seus detalhes", async 
   await expect(page.getByLabel("Cliente", { exact: false })).toContainText(
     "Carolina Teste",
   );
-  await page.getByLabel("Título da oportunidade").fill("Contrato aprovado");
   await page.getByLabel("Status", { exact: true }).selectOption("won");
   await page
     .getByRole("button", { name: "Salvar alterações", exact: true })
@@ -172,7 +169,7 @@ test("cadastra cliente dentro de uma oportunidade e edita seus detalhes", async 
   await page.getByLabel("Status", { exact: true }).selectOption("won");
   await expect(
     page.getByRole("button", {
-      name: "Abrir oportunidade Contrato aprovado",
+      name: "Abrir oportunidade Carolina Teste",
       exact: true,
     }),
   ).toBeVisible();
@@ -409,7 +406,7 @@ test("layout móvel preserva navegação e cadastro sem transbordar a página", 
   await page
     .getByRole("button", { name: "Nova oportunidade", exact: true })
     .click();
-  await expect(page.getByLabel("Título da oportunidade")).toBeVisible();
+  await expect(page.getByLabel("Valor (R$)")).toBeVisible();
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
   await page.getByRole("button", { name: "Clientes", exact: true }).click();
   await expect(
