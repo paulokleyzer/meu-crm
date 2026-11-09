@@ -263,6 +263,7 @@ export function KanbanBoard({
   const [overStage, setOverStage] = useState<string | null>(null);
   const dragEditToken = useRef(0);
   const keyboardTarget = useRef<string | null>(null);
+  const keyboardDragging = useRef(false);
   const keyboardCoordinates: KeyboardCoordinateGetter = (
     event,
     { context, currentCoordinates },
@@ -270,18 +271,19 @@ export function KanbanBoard({
     const { active, over, collisionRect, droppableRects } = context;
     if (
       !active ||
-      !collisionRect ||
       !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.code)
     )
       return;
     event.preventDefault();
+    const activeStage = deals.find((deal) => deal.id === String(active.id))?.stageId;
     const currentStage = String(
-      over?.data.current?.stageId || active.data.current?.stageId,
+      over?.data.current?.stageId || active.data.current?.stageId || activeStage || "",
     );
     let targetId: string | undefined;
     let emptyStage = false;
     if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
       const index = pipeline.stages.findIndex((s) => s.id === currentStage);
+      if (index < 0) return currentCoordinates;
       const stage =
         pipeline.stages[index + (event.code === "ArrowRight" ? 1 : -1)];
       if (!stage) return currentCoordinates;
@@ -299,7 +301,8 @@ export function KanbanBoard({
     // Apenas calcular uma posição pode deixar a colisão no cartão anterior.
     keyboardTarget.current = targetId || null;
     const rect = targetId ? droppableRects.get(targetId) : undefined;
-    if (!rect) return { x: currentCoordinates.x + 1, y: currentCoordinates.y };
+    if (!rect || !collisionRect)
+      return { x: currentCoordinates.x + 1, y: currentCoordinates.y };
     // Alinhe os centros em cartões com alturas diferentes. O ajuste antigo
     // pelo canto superior podia manter a colisão na coluna de origem.
     return {
@@ -312,7 +315,7 @@ export function KanbanBoard({
     };
   };
   const collisionDetection = useCallback<CollisionDetection>((args) => {
-    if (!args.pointerCoordinates && keyboardTarget.current) {
+    if (keyboardDragging.current && keyboardTarget.current) {
       const destination = args.droppableContainers.find(
         (container) => String(container.id) === keyboardTarget.current,
       );
@@ -332,6 +335,7 @@ export function KanbanBoard({
   const activeDeal = deals.find((d) => d.id === activeId);
   const dragEnd = ({ active, over }: DragEndEvent) => {
     keyboardTarget.current = null;
+    keyboardDragging.current = false;
     setActiveId(null);
     setOverStage(null);
     if (!over || over.id === active.id) return;
@@ -376,8 +380,9 @@ export function KanbanBoard({
           onDragCancel: () => "Movimentação cancelada.",
         },
       }}
-      onDragStart={({ active }) => {
+      onDragStart={({ active, activatorEvent }) => {
         keyboardTarget.current = null;
+        keyboardDragging.current = activatorEvent.type === "keydown";
         dragEditToken.current = getEditToken();
         setActiveId(String(active.id));
       }}
@@ -388,6 +393,7 @@ export function KanbanBoard({
       }
       onDragCancel={() => {
         keyboardTarget.current = null;
+        keyboardDragging.current = false;
         setActiveId(null);
         setOverStage(null);
       }}
