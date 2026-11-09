@@ -87,7 +87,7 @@ describe("importação segura de conversas", () => {
     expect(deal.customerId).toBe(customer.id);
     expect(deal.source).toBe("WhatsApp histórico");
     expect(deal.notes).toContain("Importação revisada");
-    expect(deal.notes).not.toContain("Olá, consigo mandar o orçamento amanhã");
+    expect(deal.notes).not.toContain("[08/11/2026, 11:23:19]");
   });
 
   it("reutiliza clientes existentes e impede duplicar negociação aberta", () => {
@@ -98,6 +98,6 @@ describe("importação segura de conversas", () => {
     expect(second.skipped).toBe(1);
     expect(second.data.customers).toHaveLength(first.customers.length);
     expect(second.data.deals).toHaveLength(first.deals.length);
-    expect(matchCustomer(first, "João Silva", "")?.name).toBe("João Silva");
+    expect(matchCustomer(first, "João Silva", "+55 19 98999-1010")?.name).toBe("João Silva");
   });
 });

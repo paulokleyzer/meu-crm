@@ -188,10 +188,14 @@ export function reviewLocally(thread: ChatThread): ChatReview {
 
 export function matchCustomer(data: CrmData, name: string, phone: string) {
   const digits = normalizedPhone(phone).replace(/\D/g, "");
-  return data.customers.find((c) =>
-    (digits && normalizedPhone(c.phone).replace(/\D/g, "") === digits) ||
-    (normalized(c.name.trim()) === normalized(name.trim()) && name.trim().length > 2),
+  if (digits)
+    return data.customers.find((c) => normalizedPhone(c.phone).replace(/\D/g, "") === digits);
+  // Nome isolado não comprova identidade quando há telefone cadastrado.
+  const matches = data.customers.filter((c) =>
+    normalized(c.name.trim()) === normalized(name.trim()) && name.trim().length > 2
   );
+  return matches.length === 1 && !normalizedPhone(matches[0].phone)
+    ? matches[0] : undefined;
 }
 
 export function importApprovedChats(
@@ -213,6 +217,10 @@ export function importApprovedChats(
       )
     ) { skipped++; continue; }
     let customer = matchCustomer(next, item.customerName, item.phone);
+    // Identidades homônimas ou sem telefone devem ser conferidas manualmente.
+    if (!customer && next.customers.some((c) =>
+      normalized(c.name.trim()) === normalized(item.customerName.trim())
+    )) { skipped++; continue; }
     if (!customer) {
       next = saveCustomer(next, {
         name: item.customerName.trim().slice(0, 120),

@@ -17,6 +17,7 @@ import {
   type ChatSituation,
 } from "@/lib/chat-import";
 import { readWhatsAppExport } from "@/lib/chat-zip";
+import { normalized } from "@/lib/format";
 import { Button } from "./ui";
 
 const CATEGORY: Record<ChatCategory, string> = {
@@ -315,9 +316,12 @@ export function ChatImportView({
             {shown.map((proposal) => {
               const existing = matchCustomer(data, proposal.customerName, proposal.phone);
               const target = data.pipelines.find((p) => p.id === proposal.pipelineId);
-              const conflict = existing && data.deals.some((d) =>
-                d.customerId === existing.id && d.pipelineId === proposal.pipelineId && d.status === "open"
+              const possibleDuplicate = !existing && data.customers.some((c) =>
+                normalized(c.name.trim()) === normalized(proposal.customerName.trim())
               );
+              const conflict = possibleDuplicate || Boolean(existing && data.deals.some((d) =>
+                d.customerId === existing.id && d.pipelineId === proposal.pipelineId && d.status === "open"
+              ));
               return (
                 <article className="import-row" key={proposal.thread.id}>
                   <div className="import-row-head">
@@ -386,7 +390,8 @@ export function ChatImportView({
                     <p><b>Ação sugerida:</b> {proposal.review.nextStep}</p>
                     {proposal.review.partial && <p className="import-error">Histórico parcial: revisão completa necessária. Não pode ser importado automaticamente.</p>}
                     {existing && <p className="import-duplicate">Contato existente: {existing.name}. Será reutilizado.</p>}
-                    {conflict && <p className="import-duplicate">Já existe oportunidade aberta neste funil. Não será duplicada.</p>}
+                    {possibleDuplicate && <p className="import-duplicate">Há um contato com este nome, mas a identidade não está confirmada pelo telefone. Revise manualmente antes de cadastrar.</p>}
+                    {conflict && !possibleDuplicate && <p className="import-duplicate">Já existe oportunidade aberta neste funil. Não será duplicada.</p>}
                     <details><summary>Ver evidências e contexto</summary>
                       {proposal.review.evidence.length ?
                         <ul>{proposal.review.evidence.map((evidence, i) => <li key={i}>{evidence}</li>)}</ul> :
