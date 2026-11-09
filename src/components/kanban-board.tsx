@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { getEditToken } from "@/hooks/use-crm";
 import {
   DndContext,
@@ -262,6 +262,7 @@ export function KanbanBoard({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
   const dragEditToken = useRef(0);
+  const keyboardTarget = useRef<string | null>(null);
   const keyboardCoordinates: KeyboardCoordinateGetter = (
     event,
     { context, currentCoordinates },
@@ -294,8 +295,11 @@ export function KanbanBoard({
       const index = ordered.findIndex((d) => d.id === (over?.id || active.id));
       targetId = ordered[index + (event.code === "ArrowDown" ? 1 : -1)]?.id;
     }
+    // Com teclado, a seta seleciona uma etapa/cartão explicitamente.
+    // Apenas calcular uma posição pode deixar a colisão no cartão anterior.
+    keyboardTarget.current = targetId || null;
     const rect = targetId ? droppableRects.get(targetId) : undefined;
-    if (!rect) return currentCoordinates;
+    if (!rect) return { x: currentCoordinates.x + 1, y: currentCoordinates.y };
     // Alinhe os centros em cartões com alturas diferentes. O ajuste antigo
     // pelo canto superior podia manter a colisão na coluna de origem.
     return {
@@ -307,6 +311,15 @@ export function KanbanBoard({
         collisionRect.top - (emptyStage ? 0 : collisionRect.height / 2),
     };
   };
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    if (!args.pointerCoordinates && keyboardTarget.current) {
+      const destination = args.droppableContainers.find(
+        (container) => String(container.id) === keyboardTarget.current,
+      );
+      if (destination) return [{ id: destination.id }];
+    }
+    return detectCollision(args);
+  }, []);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 7 } }),
     useSensor(TouchSensor, {
@@ -318,6 +331,7 @@ export function KanbanBoard({
   );
   const activeDeal = deals.find((d) => d.id === activeId);
   const dragEnd = ({ active, over }: DragEndEvent) => {
+    keyboardTarget.current = null;
     setActiveId(null);
     setOverStage(null);
     if (!over || over.id === active.id) return;
@@ -344,7 +358,7 @@ export function KanbanBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={detectCollision}
+      collisionDetection={collisionDetection}
       accessibility={{
         screenReaderInstructions: {
           draggable:
@@ -363,6 +377,7 @@ export function KanbanBoard({
         },
       }}
       onDragStart={({ active }) => {
+        keyboardTarget.current = null;
         dragEditToken.current = getEditToken();
         setActiveId(String(active.id));
       }}
@@ -372,6 +387,7 @@ export function KanbanBoard({
         )
       }
       onDragCancel={() => {
+        keyboardTarget.current = null;
         setActiveId(null);
         setOverStage(null);
       }}
