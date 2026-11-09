@@ -5,7 +5,7 @@
 ## Implementado
 
 - Nova seção Recuperação, preservando o layout dos funis.
-- Leitura local, no navegador, de exportações WhatsApp TXT e ZIP (somente TXT interno; mídias ignoradas), até 100 conversas, 60 MB por lote, 20 MB por arquivo e 5 MB por transcrição.
+- Leitura local, no navegador, de exportações WhatsApp TXT e ZIP (somente TXT interno; mídias ignoradas), até 100 conversas pendentes por lote, 60 MB por lote, 20 MB por arquivo e 5 MB por transcrição. **Não há limite total de lotes:** conclua a revisão/importação, limpe a análise local e carregue o próximo conjunto. Essa versão ainda não mantém uma fila de múltiplos lotes entre recargas.
 - Leitura de histórico iPhone e Android, mensagens com múltiplas linhas, participantes, nomes, telefones disponíveis e detecção aproximada de grupos.
 - Triagem inicial por regras. Essa triagem não é inteligência artificial e nunca deve ser tratada como decisão definitiva.
 - Revisão por conversa: categoria, situação, evidências, nome, telefone, tipo de negócio, funil e etapa.
@@ -35,7 +35,7 @@ O uso da API OpenAI tem custo por consumo independente da assinatura ChatGPT. O 
 ## Como usar
 
 1. WhatsApp Business: abra cada conversa, toque no nome do contato, exporte a conversa **sem mídia** e salve TXT/ZIP. A exportação oficial é individual.
-2. CRM protegido > Recuperação > Selecionar conversas (até 100).
+2. CRM protegido > Recuperação > Selecionar conversas (até 100 por lote). Para mais conversas, finalize o lote, use Concluir lote / começar outro e repita; não existe limite total de registros importados.
 3. Confira a triagem inicial. Grupos, fornecedores e conversas sem interesse não se tornam clientes por padrão.
 4. Com a API de IA configurada, autorize explicitamente o envio à OpenAI e clique Analisar com IA; revise cada resultado e suas evidências.
 5. Ajuste classificação e estágio; marque apenas conversas individuais classificadas como interesse ativo ou recuperável e sem oportunidade duplicada.

@@ -112,7 +112,7 @@ export function ChatImportView({
     setError("");
     if (!files.length) return;
     if (candidates.length + files.length > 100) {
-      setError("Limite de 100 conversas por lote. Importe em lotes menores.");
+      setError("Você pode analisar quantos lotes quiser, com até 100 conversas pendentes por vez. Conclua e limpe o lote atual antes de carregar outro.");
       return;
     }
     if (files.reduce((n, file) => n + file.size, 0) > 60_000_000) {
@@ -262,7 +262,7 @@ export function ChatImportView({
       <div className="import-actions">
         <div>
           <strong>Importar exportações .TXT ou .ZIP</strong>
-          <p>Até 100 arquivos por lote. ZIP com mídia: só o texto é lido. Nenhum contato é cadastrado automaticamente.</p>
+          <p>Até 100 conversas por lote, sem limite total de lotes. Para analisar 500 ou 1.000, repita a operação após concluir o lote anterior. ZIP com mídia: só o texto é lido. Nenhum contato é cadastrado automaticamente.</p>
         </div>
         <input
           ref={fileRef}
@@ -309,7 +309,7 @@ export function ChatImportView({
               </select>
             </label>
             <Button onClick={() => { cancelled.current = true; setCandidates([]); setError(""); }}>
-              <RotateCcw size={15} /> Limpar análise local
+              <RotateCcw size={15} /> Concluir lote / começar outro
             </Button>
           </div>
           <div className="import-list">
