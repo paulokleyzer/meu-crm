@@ -71,11 +71,13 @@ function CardContents({ deal, data }: { deal: Deal; data: CrmData }) {
       </span>
       <span className="card-divider" />
       <span className="card-bottom">
-        <span className={`card-date ${overdue ? "overdue" : ""}`}>
-          <CalendarDays size={13} />
-          {shortDate(deal.expectedCloseDate)}
-          {overdue && <span className="sr-only"> · Atrasada</span>}
-        </span>
+        {deal.expectedCloseDate && (
+          <span className={`card-date ${overdue ? "overdue" : ""}`}>
+            <CalendarDays size={13} />
+            {shortDate(deal.expectedCloseDate)}
+            {overdue && <span className="sr-only"> · Atrasada</span>}
+          </span>
+        )}
         <span className="card-contact">{customer?.name.split(" ")[0]}</span>
         <span
           className={`avatar avatar-small avatar-${deal.owner.length % 4}`}

@@ -114,7 +114,7 @@ export function DealDialog({
                   owner: String(f.get("owner")),
                   source,
                   businessTypeId,
-                  expectedCloseDate: String(f.get("date")),
+                  expectedCloseDate: deal?.expectedCloseDate ?? "",
                   notes: String(f.get("notes")).trim(),
                 },
                 deal?.id,
@@ -135,28 +135,19 @@ export function DealDialog({
                 </span>
               </div>
             )}
-            <div className="form-grid">
-              <Field label="Valor (R$) *">
-                <input
-                  name="value"
-                  autoFocus
-                  type="number"
-                  min={0}
-                  max={999999999999}
-                  step="0.01"
-                  defaultValue={deal?.value ?? ""}
-                  placeholder="0,00"
-                  required
-                />
-              </Field>
-              <Field label="Previsão de fechamento">
-                <input
-                  name="date"
-                  type="date"
-                  defaultValue={deal?.expectedCloseDate}
-                />
-              </Field>
-            </div>
+            <Field label="Valor (R$) *">
+              <input
+                name="value"
+                autoFocus
+                type="number"
+                min={0}
+                max={999999999999}
+                step="0.01"
+                defaultValue={deal?.value ?? ""}
+                placeholder="0,00"
+                required
+              />
+            </Field>
             <div className="client-select">
               <Field label="Cliente *">
                 <select

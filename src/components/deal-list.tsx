@@ -1,7 +1,7 @@
 import { ArrowUpRight, Building2 } from "lucide-react";
 import type { CrmData, Deal, Pipeline } from "@/lib/types";
 import { STATUS_LABELS } from "@/lib/types";
-import { initials, money, shortDate } from "@/lib/format";
+import { initials, money } from "@/lib/format";
 
 export function DealList({
   deals,
@@ -23,7 +23,6 @@ export function DealList({
             <th>Cliente</th>
             <th>Valor</th>
             <th>Etapa</th>
-            <th>Fechamento</th>
             <th>Responsável</th>
             <th>Status</th>
             <th>
@@ -55,7 +54,6 @@ export function DealList({
                     {pipeline.stages.find((s) => s.id === deal.stageId)?.name}
                   </span>
                 </td>
-                <td>{shortDate(deal.expectedCloseDate)}</td>
                 <td>
                   <span className="owner-cell">
                     <span className="avatar avatar-small">

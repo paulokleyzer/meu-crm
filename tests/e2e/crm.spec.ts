@@ -127,6 +127,7 @@ test("cadastra cliente dentro de uma oportunidade e edita seus detalhes", async 
     .getByRole("button", { name: "Nova oportunidade", exact: true })
     .click();
   await expect(page.getByLabel("Título da oportunidade")).toHaveCount(0);
+  await expect(page.getByLabel("Previsão de fechamento")).toHaveCount(0);
   await page.getByLabel("Valor (R$)").fill("14990.50");
   await page
     .getByRole("button", { name: "Cadastrar cliente", exact: true })
