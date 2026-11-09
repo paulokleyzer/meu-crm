@@ -21,8 +21,9 @@
 A aplicação atual está em CRM_ACCESS_MODE=demo, com banco compartilhado. **Não carregue conversas reais nela.** Em modo demo, a prévia funciona somente para dados fictícios; a análise com IA e a operação de importação estão bloqueadas também no servidor.
 
 Antes de usar conversas reais:
-1. Configure uma instância de prévia ou o projeto privado, sem substituir a produção.
-2. Configure variáveis no Netlify em escopos apropriados, com HTTPS:
+1. Crie **outro site no Netlify**, conectado a esta branch, com **Netlify Database própria**. Não reutilize o banco da produção/demo pública, mesmo em Deploy Preview no mesmo site.
+2. Configure variáveis no **novo site** do Netlify em escopos apropriados, com HTTPS:
+   - CRM_DEPLOY_V2=true
    - CRM_ACCESS_MODE=basic
    - CRM_BASIC_USER=usuario_admin
    - CRM_BASIC_PASSWORD=senha_unica_de_16_ou_mais_caracteres
@@ -30,7 +31,7 @@ Antes de usar conversas reais:
    - CRM_CHAT_IMPORT_API_KEY=chave_OpenAI_PRIVADA
    - CRM_CHAT_IMPORT_MODEL=gpt-5-mini (opcional)
 3. Nunca coloque senhas ou chaves em arquivos versionados, no chat ou em nomes NEXT_PUBLIC_.
-4. Verifique autenticação de páginas, API CRM e API de análise; faça backup do banco e valide a migração SQL 005.
+4. Confirme que os dados e a URL do site público existente **não** são acessíveis pela nova instância, que usa banco separado. Verifique a autenticação de páginas, API CRM e API de análise; valide a migração SQL 005.
 5. Teste primeiro com exportações fictícias. Depois obtenha consentimentos e analise obrigações de tratamento de dados (LGPD).
 
 O uso da API OpenAI tem custo por consumo independente da assinatura ChatGPT. O endpoint usa store:false, mas enviará a transcrição à API somente quando o operador autorizar e clicar em analisar.
