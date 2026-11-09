@@ -3,7 +3,7 @@ name: Validar CRM
 on:
   push:
     branches:
-      [main, feat/crm-v1, feat/crm-postgres, feat/crm-netlify, feat/crm-v2]
+      [main, feat/crm-v1, feat/crm-postgres, feat/crm-netlify, feat/crm-v2, feat/crm-recuperacao-leads]
   pull_request:
     branches: [main]
 

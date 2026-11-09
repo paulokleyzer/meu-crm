@@ -19,6 +19,7 @@ import {
   List,
   LoaderCircle,
   MoreHorizontal,
+  MessagesSquare,
   Pencil,
   Plus,
   Search,
@@ -77,6 +78,7 @@ import { DealList } from "./deal-list";
 import { InsightsView } from "./insights-view";
 import { SettingsView } from "./settings-view";
 import { ActivitiesView, ActivityDialog } from "./activities-view";
+import { ChatImportView } from "./chat-import-view";
 
 const defaultFilters: DealFilters = {
   query: "",
@@ -85,7 +87,7 @@ const defaultFilters: DealFilters = {
   status: "open",
   due: "",
 };
-type Section = "deals" | "customers" | "insights" | "activities" | "settings";
+type Section = "deals" | "customers" | "insights" | "activities" | "settings" | "import";
 type Update = UpdateCrm;
 
 export function CrmApp() {
@@ -364,6 +366,7 @@ function Workspace({
               { id: "deals", icon: FolderKanban, label: "Funis" },
               { id: "customers", icon: Users, label: "Clientes" },
               { id: "activities", icon: CalendarDays, label: "Atividades" },
+              { id: "import", icon: MessagesSquare, label: "Recuperação" },
               { id: "insights", icon: BarChart3, label: "Visão geral" },
               { id: "settings", icon: Settings2, label: "Configurações" },
             ] as const
@@ -438,6 +441,8 @@ function Workspace({
                   ? "Clientes"
                   : section === "activities"
                     ? "Atividades"
+                    : section === "import"
+                      ? "Recuperação de leads"
                     : section === "settings"
                       ? "Configurações"
                       : "Visão geral"}
@@ -860,6 +865,7 @@ function Workspace({
             />
           )}
           {section === "insights" && <InsightsView data={data} />}
+          {section === "import" && <ChatImportView data={data} update={update} />}
           {section === "settings" && (
             <SettingsView data={data} update={update} />
           )}

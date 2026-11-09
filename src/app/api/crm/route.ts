@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { crmSchema } from "@/lib/schema";
 import { apiHeaders, protectedApi } from "@/server/http";
+import { accessMode } from "@/server/access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ const writeSchema = z.object({
     .nonnegative()
     .max(Number.MAX_SAFE_INTEGER - 1),
   requestId: z.uuid(),
-  operation: z.enum(["change", "import"]),
+  operation: z.enum(["change", "import", "chat_import"]),
 });
 
 export function GET(request: Request) {
@@ -94,6 +95,11 @@ export function PUT(request: Request) {
             "Dados inválidos. Verifique os campos e referências do backup.",
         },
         { status: 422, headers: apiHeaders },
+      );
+    if (parsed.data.operation === "chat_import" && accessMode() !== "basic")
+      return Response.json(
+        { error: "Importação de conversas exige CRM protegido com senha." },
+        { status: 403, headers: apiHeaders },
       );
     const result = await repository.save(parsed.data);
     return Response.json(result, {
