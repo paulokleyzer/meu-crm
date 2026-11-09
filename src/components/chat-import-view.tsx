@@ -17,6 +17,7 @@ import {
   type ChatSituation,
 } from "@/lib/chat-import";
 import { readWhatsAppExport } from "@/lib/chat-zip";
+import { MAX_SEGMENTS, splitChatMessages, validateSegmentReviews, type ChatSegmentFinding } from "@/lib/chat-analysis";
 import { normalized } from "@/lib/format";
 import { Button } from "./ui";
 
@@ -87,6 +88,7 @@ export function ChatImportView({
   const [reading, setReading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [filter, setFilter] = useState("all");
   const [error, setError] = useState("");
@@ -154,41 +156,106 @@ export function ChatImportView({
     setReading(false);
   }
 
-  async function analyze(id: string) {
+  async function analyze(id: string, position: string) {
     const item = candidates.find((p) => p.thread.id === id);
     if (!item || !config.protected || !config.aiReady || !consent) return false;
-    const size = item.thread.messages.reduce((sum, m) => sum + m.text.length, 0);
-    if (size > 100_000 || item.thread.messages.length > 5_000 || item.review.partial) {
-      revise(id, { partial: true });
-      setError("Histórico muito longo para uma única análise completa. Não será importado automaticamente.");
+    const segments = splitChatMessages(item.thread.messages);
+    if (segments.length > MAX_SEGMENTS || item.review.partial) {
+      revise(id, { partial: true, confidence: "low" });
+      setError("Histórico excede os limites seguros. Não foi analisado integralmente; a importação está bloqueada.");
       return false;
     }
-    try {
+
+    async function requestReview(payload: Record<string, unknown>): Promise<ChatReview> {
       const response = await fetch("/api/chat-import", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: item.thread.name,
-          isGroup: item.thread.isGroup,
-          participants: item.thread.participants,
-          messages: item.thread.messages,
+          name: item!.thread.name,
+          isGroup: item!.thread.isGroup,
+          participants: item!.thread.participants,
+          ...payload,
         }),
       });
       const result = await response.json();
       if (!response.ok || !result.review) throw new Error(result.error || "Falha na análise.");
-      const review = result.review as ChatReview;
+      return result.review as ChatReview;
+    }
+    try {
+      let review: ChatReview;
+      if (segments.length === 1) {
+        setProgress(position + " · trecho 1/1");
+        review = await requestReview({ mode: "single", messages: segments[0].messages });
+      } else {
+        const findings: ChatSegmentFinding[] = [];
+        for (const segment of segments) {
+          if (cancelled.current) return false;
+          setProgress(position + " · trecho " + segment.index + "/" + segments.length);
+          const part = await requestReview({ mode: "segment", messages: segment.messages });
+          findings.push({
+            index: segment.index, startAt: segment.startAt,
+            endAt: segment.endAt, review: part,
+          });
+        }
+        let current = validateSegmentReviews(segments, findings);
+        let level = 1;
+        while (current.length > 20) {
+          const reduced: ChatSegmentFinding[] = [];
+          for (let i = 0; i < current.length; i += 12) {
+            if (cancelled.current) return false;
+            const group = current.slice(i, i + 12);
+            setProgress(position + " · consolidação nível " + level +
+              " (" + (Math.floor(i / 12) + 1) + "/" + Math.ceil(current.length / 12) + ")");
+            const summarized = await requestReview({
+              mode: "consolidate",
+              findings: group.map((finding, index) => ({ ...finding, index: index + 1 })),
+            });
+            reduced.push({
+              index: reduced.length + 1,
+              startAt: group[0].startAt,
+              endAt: group[group.length - 1].endAt,
+              review: { ...summarized, partial: true },
+            });
+          }
+          current = reduced;
+          level++;
+        }
+        if (cancelled.current) return false;
+        setProgress(position + " · síntese final");
+        review = await requestReview({ mode: "consolidate", findings: current });
+      }
+      if (cancelled.current) return false;
       const pipeline = suggestedPipeline(data, review.area);
       setCandidates((list) => list.map((p) => p.thread.id === id ? {
-        ...p, review, selected: false,
+        ...p, review: { ...review, partial: false }, selected: false,
         pipelineId: pipeline.id, stageId: pipeline.stages[0].id,
         businessTypeId: suggestedType(data, review.area),
       } : p));
       return true;
     } catch (e) {
+      revise(id, { partial: true, confidence: "low" });
       setError(e instanceof Error ? e.message : "A análise não foi concluída.");
       return false;
     }
+  }
+
+  async function analyzeSingle(id: string) {
+    if (analyzing || !config.protected || !config.aiReady || !consent) return;
+    const item = candidates.find((p) => p.thread.id === id);
+    if (!item) return;
+    const count = splitChatMessages(item.thread.messages).length;
+    if (count > 10 && !window.confirm(
+      "Esta conversa exige ao menos " + (count + 1) +
+      " chamadas à API de IA, cobradas por uso. Deseja continuar?"
+    )) return;
+    cancelled.current = false;
+    setError("");
+    setAnalyzing(true);
+    const ok = await analyze(id, "1/1 conversa");
+    setProgress("");
+    setAnalyzing(false);
+    if (ok) toast.success("Análise concluída. Confira o resultado antes de importar.");
   }
 
   async function analyzeAll() {
@@ -196,12 +263,22 @@ export function ChatImportView({
     cancelled.current = false;
     setAnalyzing(true);
     setError("");
-    const queue = candidates.filter((p) => p.review.method !== "ai");
+    const queue = candidates.filter((p) => p.review.method !== "ai" || p.review.partial);
+    const required = queue.reduce((sum, p) => {
+      const count = splitChatMessages(p.thread.messages).length;
+      return sum + count + (count > 1 ? Math.ceil(count / 12) + 1 : 0);
+    }, 0);
+    if (required > 10 && !window.confirm(
+      "A análise enviará aproximadamente " + required +
+      " solicitações à API de IA, com cobrança por uso. Continuar?"
+    )) {
+      setAnalyzing(false);
+      return;
+    }
     let ok = 0;
     for (let i = 0; i < queue.length; i++) {
       if (cancelled.current) break;
-      setProgress((i + 1) + "/" + queue.length);
-      if (await analyze(queue[i].thread.id)) ok++;
+      if (await analyze(queue[i].thread.id, (i + 1) + "/" + queue.length)) ok++;
     }
     setProgress("");
     setAnalyzing(false);
@@ -262,7 +339,7 @@ export function ChatImportView({
       <div className="import-actions">
         <div>
           <strong>Importar exportações .TXT ou .ZIP</strong>
-          <p>Até 100 conversas por lote, sem limite total de lotes. Para analisar 500 ou 1.000, repita a operação após concluir o lote anterior. ZIP com mídia: só o texto é lido. Nenhum contato é cadastrado automaticamente.</p>
+          <p>Até 100 conversas por lote, sem limite total de lotes. Para analisar 500 ou 1.000, repita a operação após concluir o lote anterior. Conversas longas são divididas em trechos para a IA, com custos adicionais por uso. ZIP com mídia: só o texto é lido.</p>
         </div>
         <input
           ref={fileRef}
@@ -308,7 +385,7 @@ export function ChatImportView({
                 <option value="other">Outras conversas</option>
               </select>
             </label>
-            <Button onClick={() => { cancelled.current = true; setCandidates([]); setError(""); }}>
+            <Button onClick={() => { cancelled.current = true; setCandidates([]); setExpandedId(null); setError(""); }}>
               <RotateCcw size={15} /> Concluir lote / começar outro
             </Button>
           </div>
@@ -384,6 +461,14 @@ export function ChatImportView({
                     </label>
                   </div>
                   <div className="import-summary">
+                    {config.aiReady && (
+                      <Button
+                        disabled={!consent || analyzing}
+                        onClick={() => void analyzeSingle(proposal.thread.id)}
+                      >
+                        <BrainCircuit size={15} /> Analisar esta conversa
+                      </Button>
+                    )}
                     <strong>{proposal.review.method === "ai" ? "Análise por IA" : "Triagem preliminar"} · {AREA[proposal.review.area]} · Confiança {proposal.review.confidence}</strong>
                     <p>{proposal.review.summary}</p>
                     <p><b>Por quê:</b> {proposal.review.reason}</p>
@@ -397,6 +482,20 @@ export function ChatImportView({
                         <ul>{proposal.review.evidence.map((evidence, i) => <li key={i}>{evidence}</li>)}</ul> :
                         <p>Não foram identificadas evidências suficientes.</p>}
                     </details>
+                    <button
+                      type="button"
+                      className="import-history-button"
+                      onClick={() => setExpandedId(expandedId === proposal.thread.id ? null : proposal.thread.id)}
+                    >
+                      {expandedId === proposal.thread.id ? "Ocultar histórico" : "Ler histórico completo no navegador"}
+                    </button>
+                    {expandedId === proposal.thread.id && (
+                      <div className="import-full-history" role="region" aria-label={"Histórico de " + proposal.thread.name}>
+                        {proposal.thread.messages.map((message, i) => (
+                          <p key={i}><span>{message.at} · {message.sender}</span>{message.text}</p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {!eligible(proposal) && <span className="import-subtle">Não sugerida para importação. Corrija a classificação somente depois de ler a conversa.</span>}
                 </article>

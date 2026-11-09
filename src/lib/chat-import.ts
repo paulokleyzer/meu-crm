@@ -110,7 +110,7 @@ export function parseWhatsAppText(fileName: string, text: string): ChatThread {
       }
     }
     if (current && messages.length <= MAX_MESSAGES)
-      current.text = (current.text + "\n" + line).slice(0, 40_000);
+      current.text = current.text + "\n" + line;
   }
   const participants = [...new Set(messages.map((message) => message.sender))];
   const titleGroup = /grupo|integradores|compra coletiva|grupo de compras|grupo solar/i.test(name);

@@ -10,6 +10,8 @@
 - Triagem inicial por regras. Essa triagem não é inteligência artificial e nunca deve ser tratada como decisão definitiva.
 - Revisão por conversa: categoria, situação, evidências, nome, telefone, tipo de negócio, funil e etapa.
 - IA opcional via endpoint privado, com JSON estruturado e consentimento explícito, usando chave separada de API da OpenAI no servidor.
+- Análise de conversas longas sem cortar silenciosamente a transcrição: separação cronológica em até 90 trechos por conversa, avaliação de cada trecho por IA, e uma ou mais etapas de consolidação por IA para compreender a evolução da negociação. Trechos que excederem os limites ficam bloqueados para importação automática.
+- Leitura opcional do histórico completo na tela local, sem armazenar a transcrição no PostgreSQL. É possível analisar uma conversa individualmente, além do lote inteiro. O operador vê confirmação de custo antes de volumes maiores de chamadas à API.
 - Aprovação manual para cada oportunidade. Gravação transacional com auditoria da operação chat_import e prevenção conservadora de duplicidades. Até 30 oportunidades por gravação.
 - Não armazena a transcrição completa, não envia mensagens e não cria contatos sem aprovação.
 
@@ -44,7 +46,7 @@ O uso da API OpenAI tem custo por consumo independente da assinatura ChatGPT. O 
 ## Limites
 
 - Sem sincronização automática da Meta ou Coexistência nesta fase; não migre o número existente por conta própria.
-- IA: no máximo 5.000 mensagens e 100 mil caracteres por conversa. Históricos maiores não são processados por completo nesta versão e ficam bloqueados para importação; exigem síntese em partes com rastreabilidade na próxima evolução.
+- IA: processa até 20.000 mensagens por conversa e no máximo 90 segmentos de aproximadamente 60 mil caracteres, seguidos de sínteses sucessivas. Históricos maiores são marcados como parciais e a importação fica bloqueada. Cada segmento e síntese gera chamada adicional cobrada pela API. Falha em qualquer segmento não resulta em conclusão fictícia.
 - Mídias, PDFs, áudios e contatos anexos não são analisados.
 - Desistência não é inferida por silêncio. A triagem sem IA é de baixa confiança; mesmo a IA exige revisão humana.
 - Fornecedores e grupos devem ter cadastros separados em fase posterior.

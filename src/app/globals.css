@@ -2892,3 +2892,23 @@ h1 {
   .sidebar nav { gap:2px; }
   .sidebar .nav-item { min-width:0; flex:1; padding:6px 2px; font-size:7px; }
 }
+
+
+/* Histórico fica visível somente quando solicitado pelo operador. */
+.import-history-button {
+  display:inline-flex; padding:9px 12px; margin-top:13px; border:1px solid #cfe4d8;
+  border-radius:8px; color:#166b4a; background:white; cursor:pointer;
+  font-size:12px; font-weight:600;
+}
+.import-history-button:hover { background:#edf9f1; }
+.import-full-history {
+  max-height:340px; overflow-y:auto; overscroll-behavior:contain; margin-top:10px;
+  border:1px solid #d7e6dc; border-radius:8px; background:white;
+}
+.import-full-history p {
+  display:flex; flex-direction:column; white-space:pre-wrap; overflow-wrap:anywhere;
+  padding:10px 13px; border-bottom:1px solid #f0f3f0; margin:0; line-height:1.5;
+}
+.import-full-history p:last-child { border-bottom:0; }
+.import-full-history p span { color:#587569; font-weight:600; font-size:11px; margin-bottom:3px; }
+.import-summary > .button { margin-bottom:11px; }
