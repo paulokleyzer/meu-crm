@@ -19,6 +19,7 @@ import {
 import { readWhatsAppExport } from "@/lib/chat-zip";
 import { MAX_SEGMENTS, splitChatMessages, validateSegmentReviews, type ChatSegmentFinding } from "@/lib/chat-analysis";
 import { normalized } from "@/lib/format";
+import { exportChatReport, importChatReport } from "@/lib/chat-report";
 import { Button } from "./ui";
 
 const CATEGORY: Record<ChatCategory, string> = {
@@ -82,6 +83,7 @@ export function ChatImportView({
   update: UpdateCrm;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const reportRef = useRef<HTMLInputElement>(null);
   const cancelled = useRef(false);
   const [candidates, setCandidates] = useState<ChatProposal[]>([]);
   const [config, setConfig] = useState({ protected: false, aiReady: false });
@@ -109,6 +111,38 @@ export function ChatImportView({
   function revise(id: string, patch: Partial<ChatReview>) {
     setCandidates((list) => list.map((p) => p.thread.id === id ?
       { ...p, review: { ...p.review, ...patch }, selected: false } : p));
+  }
+  function saveReport() {
+    if (!candidates.length) return;
+    const blob = new Blob([exportChatReport(candidates)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "relatorio-recuperacao-" + new Date().toISOString().slice(0, 10) + ".json";
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.info("Relatório salvo no seu computador. Proteja o arquivo: contém dados de contatos.");
+  }
+  async function loadReport(file: File) {
+    try {
+      if (file.size > 5_000_000) throw new Error("Relatório maior que 5 MB.");
+      const rows = importChatReport(await file.text());
+      if (rows.length + candidates.length > 100)
+        throw new Error("Conclua o lote atual antes de carregar outro relatório.");
+      setCandidates((previous) => {
+        const known = new Set(previous.map((p) => p.thread.fileName + "|" + p.thread.lastAt));
+        return [...previous, ...rows.filter((p) => {
+          const key = p.thread.fileName + "|" + p.thread.lastAt;
+          if (known.has(key)) return false;
+          known.add(key);
+          return true;
+        })].slice(0, 100);
+      });
+      setError("");
+      toast.success("Relatório recuperado. Confira os dados e aprove novamente os leads.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Relatório inválido.");
+    }
   }
   async function load(files: File[]) {
     setError("");
@@ -243,7 +277,7 @@ export function ChatImportView({
   async function analyzeSingle(id: string) {
     if (analyzing || !config.protected || !config.aiReady || !consent) return;
     const item = candidates.find((p) => p.thread.id === id);
-    if (!item) return;
+    if (!item || !item.thread.messages.length) return;
     const count = splitChatMessages(item.thread.messages).length;
     if (count > 10 && !window.confirm(
       "Esta conversa exige ao menos " + (count + 1) +
@@ -263,7 +297,7 @@ export function ChatImportView({
     cancelled.current = false;
     setAnalyzing(true);
     setError("");
-    const queue = candidates.filter((p) => p.review.method !== "ai" || p.review.partial);
+    const queue = candidates.filter((p) => p.thread.messages.length && (p.review.method !== "ai" || p.review.partial));
     const required = queue.reduce((sum, p) => {
       const count = splitChatMessages(p.thread.messages).length;
       return sum + count + (count > 1 ? Math.ceil(count / 12) + 1 : 0);
@@ -364,7 +398,7 @@ export function ChatImportView({
         </label>
         <Button
           variant="primary"
-          disabled={!config.aiReady || !config.protected || !consent || !candidates.length || analyzing}
+          disabled={!config.aiReady || !config.protected || !consent || !candidates.some((p) => p.thread.messages.length) || analyzing}
           onClick={() => void analyzeAll()}
         >
           <BrainCircuit size={17} /> {analyzing ? "Analisando " + progress : "Analisar com IA"}
@@ -372,6 +406,18 @@ export function ChatImportView({
         {analyzing && <Button onClick={() => { cancelled.current = true; }}>Interromper após esta conversa</Button>}
         {!config.aiReady && <span className="import-hint">IA indisponível até configurar acesso protegido e chave no servidor. A triagem por regras não substitui a leitura completa.</span>}
       </div>
+      <input
+        ref={reportRef}
+        type="file"
+        accept=".json"
+        aria-label="Selecionar relatório de triagem"
+        className="import-hidden-input"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) void loadReport(file);
+        }}
+      />
       {error && <p className="import-error" role="alert">{error}</p>}
       {candidates.length > 0 && (
         <>
@@ -385,7 +431,12 @@ export function ChatImportView({
                 <option value="other">Outras conversas</option>
               </select>
             </label>
-            <Button onClick={() => { cancelled.current = true; setCandidates([]); setExpandedId(null); setError(""); }}>
+            <Button onClick={saveReport}>Salvar relatório JSON</Button>
+            <Button onClick={() => reportRef.current?.click()}>Abrir relatório JSON</Button>
+            <Button onClick={() => {
+              if (!window.confirm("Iniciar outro lote? As análises não exportadas serão descartadas.")) return;
+              cancelled.current = true; setCandidates([]); setExpandedId(null); setError("");
+            }}>
               <RotateCcw size={15} /> Concluir lote / começar outro
             </Button>
           </div>
@@ -413,7 +464,7 @@ export function ChatImportView({
                       <strong>{proposal.thread.name}</strong>
                     </label>
                     <span className="activity-badge">{CATEGORY[proposal.review.category]}</span>
-                    <span className="import-subtle">{proposal.thread.messages.length} mensagens · última {proposal.thread.lastAt || "desconhecida"}</span>
+                    <span className="import-subtle">{proposal.thread.messageCount ?? proposal.thread.messages.length} mensagens · última {proposal.thread.lastAt || "desconhecida"}</span>
                   </div>
                   <div className="import-row-grid">
                     <label>Classificação
@@ -463,7 +514,7 @@ export function ChatImportView({
                   <div className="import-summary">
                     {config.aiReady && (
                       <Button
-                        disabled={!consent || analyzing}
+                        disabled={!consent || analyzing || !proposal.thread.messages.length}
                         onClick={() => void analyzeSingle(proposal.thread.id)}
                       >
                         <BrainCircuit size={15} /> Analisar esta conversa
@@ -482,13 +533,17 @@ export function ChatImportView({
                         <ul>{proposal.review.evidence.map((evidence, i) => <li key={i}>{evidence}</li>)}</ul> :
                         <p>Não foram identificadas evidências suficientes.</p>}
                     </details>
-                    <button
-                      type="button"
-                      className="import-history-button"
-                      onClick={() => setExpandedId(expandedId === proposal.thread.id ? null : proposal.thread.id)}
-                    >
-                      {expandedId === proposal.thread.id ? "Ocultar histórico" : "Ler histórico completo no navegador"}
-                    </button>
+                    {proposal.thread.messages.length ? (
+                      <button
+                        type="button"
+                        className="import-history-button"
+                        onClick={() => setExpandedId(expandedId === proposal.thread.id ? null : proposal.thread.id)}
+                      >
+                        {expandedId === proposal.thread.id ? "Ocultar histórico" : "Ler histórico completo no navegador"}
+                      </button>
+                    ) : (
+                      <p className="import-subtle">Relatório recuperado: o texto original não acompanha este arquivo. Reabra a exportação do WhatsApp para reler as mensagens.</p>
+                    )}
                     {expandedId === proposal.thread.id && (
                       <div className="import-full-history" role="region" aria-label={"Histórico de " + proposal.thread.name}>
                         {proposal.thread.messages.map((message, i) => (

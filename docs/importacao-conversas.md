@@ -14,6 +14,7 @@
 - Leitura opcional do histórico completo na tela local, sem armazenar a transcrição no PostgreSQL. É possível analisar uma conversa individualmente, além do lote inteiro. O operador vê confirmação de custo antes de volumes maiores de chamadas à API.
 - Aprovação manual para cada oportunidade. Gravação transacional com auditoria da operação chat_import e prevenção conservadora de duplicidades. Até 30 oportunidades por gravação.
 - Não armazena a transcrição completa, não envia mensagens e não cria contatos sem aprovação.
+- Permite baixar um relatório JSON com as classificações, resumos e evidências (sem histórico completo) e reabri-lo em outro lote/sessão. O relatório contém dados pessoais; mantenha-o protegido. Ao restaurar, a aprovação anterior não é reaproveitada.
 
 ## Segurança antes de dados reais
 
@@ -41,7 +42,8 @@ O uso da API OpenAI tem custo por consumo independente da assinatura ChatGPT. O 
 3. Confira a triagem inicial. Grupos, fornecedores e conversas sem interesse não se tornam clientes por padrão.
 4. Com a API de IA configurada, autorize explicitamente o envio à OpenAI e clique Analisar com IA; revise cada resultado e suas evidências.
 5. Ajuste classificação e estágio; marque apenas conversas individuais classificadas como interesse ativo ou recuperável e sem oportunidade duplicada.
-6. Clique em Importar oportunidades aprovadas. O CRM salva o resumo revisado, nunca a conversa integral.
+6. Use Salvar relatório JSON para preservar as classificações mesmo se fechar a página. É possível reabrir o relatório; o texto original não acompanha o arquivo.
+7. Clique em Importar oportunidades aprovadas. O CRM salva o resumo revisado, nunca a conversa integral.
 
 ## Limites
 

@@ -2912,3 +2912,5 @@ h1 {
 .import-full-history p:last-child { border-bottom:0; }
 .import-full-history p span { color:#587569; font-weight:600; font-size:11px; margin-bottom:3px; }
 .import-summary > .button { margin-bottom:11px; }
+
+.import-hidden-input { display:none; }

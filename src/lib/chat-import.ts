@@ -13,6 +13,7 @@ export interface ChatThread {
   name: string;
   phone: string;
   messages: ChatMessage[];
+  messageCount?: number;
   participants: string[];
   isGroup: boolean;
   lastAt: string;

@@ -296,17 +296,15 @@ export function KanbanBoard({
     }
     const rect = targetId ? droppableRects.get(targetId) : undefined;
     if (!rect) return currentCoordinates;
+    // Alinhe os centros em cartões com alturas diferentes. O ajuste antigo
+    // pelo canto superior podia manter a colisão na coluna de origem.
     return {
-      x:
-        currentCoordinates.x +
-        rect.left +
-        (emptyStage ? 10 : 0) -
-        collisionRect.left,
-      y:
-        currentCoordinates.y +
-        rect.top +
-        (emptyStage ? 95 : 0) -
-        collisionRect.top,
+      x: currentCoordinates.x +
+        rect.left + (emptyStage ? 10 : rect.width / 2) -
+        collisionRect.left - (emptyStage ? 0 : collisionRect.width / 2),
+      y: currentCoordinates.y +
+        rect.top + (emptyStage ? 95 : rect.height / 2) -
+        collisionRect.top - (emptyStage ? 0 : collisionRect.height / 2),
     };
   };
   const sensors = useSensors(
